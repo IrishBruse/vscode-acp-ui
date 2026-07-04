@@ -1,2 +1,0 @@
-- Make the scrollbar for the chat app on the very right so the chat is full width for scrolling with the mouse just make the chat items the lower width
--
