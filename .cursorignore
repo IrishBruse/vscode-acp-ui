@@ -1,0 +1,5 @@
+# Un-ignore synced vendor docs that are gitignored (scripts/sync-docs.sh).
+!docs/acp/
+!docs/acp/**
+!docs/cursor-extensions/
+!docs/cursor-extensions/**

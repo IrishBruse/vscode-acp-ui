@@ -7,7 +7,15 @@
     },
     "files": {
         "ignoreUnknown": false,
-        "includes": ["**", "!webview", "!standalone/mock", "!media", "!dist"]
+        "includes": [
+            "**",
+            "!webview",
+            "!standalone/mock",
+            "!media",
+            "!dist",
+            "!docs/acp",
+            "!docs/cursor-extensions"
+        ]
     },
     "formatter": {
         "enabled": true,

@@ -121,10 +121,6 @@ export class AcpAgentProcess {
         console.info(
             `[ACP Agent ${this.options.config.name}] spawning command="${this.options.config.command}" args=${JSON.stringify(this.options.config.args)} cwd="${cwd ?? "<undefined>"}"`,
         );
-        // Helpful for diagnosing macOS PATH issues when VS Code is launched from GUI.
-        console.info(
-            `[ACP Agent ${this.options.config.name}] PATH="${env.PATH ?? "<undefined>"}"`,
-        );
 
         this.child = spawn(
             this.options.config.command,

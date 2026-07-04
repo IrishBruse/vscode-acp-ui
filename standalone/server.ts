@@ -25,6 +25,7 @@ import { parseSessionModelsFromReadmeNdjson } from "../src/acp/session/readmeSes
 import type { AcpUiSessionModelSelection } from "../src/acp/session/sessionModels";
 import { FileAcpRpcNdjsonSink } from "../src/platform/node/fileRpcNdjsonSink";
 import { createNodeAcpSessionHostRuntime } from "../src/platform/node/nodeAcpSessionHostRuntime";
+import { formatPathWithTilde } from "../src/platform/pathDisplay";
 import {
     type ExtensionToWebviewMessage,
     tryParseWebviewMessage,
@@ -346,7 +347,7 @@ wss.on("connection", (ws: WebSocket) => {
                 type: "init",
                 sessionId,
                 title: "ACP UI (standalone)",
-                workspaceLabel: process.cwd(),
+                workspaceLabel: formatPathWithTilde(process.cwd()),
                 agentVersionLabel: undefined,
                 acpAgentName: selectedAgentName,
                 availableAcpAgents: agentConfigs.map((c) => c.name),

@@ -13,6 +13,7 @@ import {
     getAcpAgentConfigsFromSettings,
 } from "../acp/config/vscodeSettingsAgents";
 import { AcpSessionBridge } from "../acp/session/acpSessionBridge";
+import { formatPathWithTilde } from "../platform/pathDisplay";
 import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";
 import type { ExtensionToWebviewMessage } from "../protocol/extensionHostMessages";
 import { tryParseWebviewMessage } from "../protocol/extensionHostMessages";
@@ -208,7 +209,9 @@ export function openOrRevealAcpUiEditor(
                         : undefined;
                 const folder = workspace.workspaceFolders?.[0];
                 const workspaceLabel =
-                    folder !== undefined ? folder.uri.fsPath : undefined;
+                    folder !== undefined
+                        ? formatPathWithTilde(folder.uri.fsPath)
+                        : undefined;
                 const configs = getAcpAgentConfigsFromSettings();
                 const availableNames = configs.map((c) => c.name);
                 const defaultAgent = agentConfig ?? configs[0];
