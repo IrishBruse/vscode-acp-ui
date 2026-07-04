@@ -7,5 +7,5 @@ standalone/acp-rpc.ndjson
 standalone/mock/
 
 # Synced vendor docs (see scripts/sync-docs.sh). Indexed by Cursor via .cursorignore.
-docs/acp/**
-docs/cursor-extensions/**
+docs/acp/
+docs/cursor-extensions/
