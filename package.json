@@ -1,4 +1,20 @@
 {
+    "scripts": {
+        "vscode:prepublish": "npm run package",
+        "build:webview": "vite build --config webview/acp-ui/vite.config.ts",
+        "dev:standalone": "concurrently --names FE,BE --prefix-colors cyan,yellow 'vite --config standalone/vite.config.ts' 'tsx --watch standalone/server.ts'",
+        "build": "npm run build:webview && node esbuild.mjs",
+        "watch": "node esbuild.mjs --watch",
+        "package": "npm run build:webview && node esbuild.mjs --production",
+        "check": "tsc --noEmit && tsc --noEmit -p webview/acp-ui/tsconfig.json && tsc --noEmit -p standalone/tsconfig.json",
+        "test": "vitest run",
+        "lint": "biome check .",
+        "lint:fix": "biome check --write .",
+        "format": "biome format --write .",
+        "verify": "concurrently --names Build,Check,Test,Lint 'npm run build' 'npm run check' 'npm run test' 'npm run lint'",
+        "publish:vscode": "bash scripts/publish.sh",
+        "sync:docs": "bash scripts/sync-docs.sh"
+    },
     "name": "ib-acp-ui",
     "displayName": "ACP UI",
     "description": "Agent Client Protocol (ACP) UI integration",
@@ -18,7 +34,8 @@
         "Other"
     ],
     "activationEvents": [
-        "onStartupFinished"
+        "onStartupFinished",
+        "onCustomEditor:ibAcpUi.session"
     ],
     "main": "./dist/extension.js",
     "contributes": {
@@ -76,7 +93,29 @@
                             ]
                         }
                     ]
+                },
+                "ib-acp-ui.sessionsDirectory": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Directory for chat .acp files. Empty uses extension global storage. Absolute path or workspace-relative."
                 }
+            }
+        },
+        "customEditors": [
+            {
+                "viewType": "ibAcpUi.session",
+                "displayName": "ACP UI",
+                "selector": [
+                    {
+                        "filenamePattern": "*.acp"
+                    }
+                ],
+                "priority": "default"
+            }
+        ],
+        "configurationDefaults": {
+            "files.associations": {
+                "*.acp": "jsonl"
             }
         },
         "viewsContainers": {
@@ -197,22 +236,6 @@
                 "when": "view == acpUiSessionsView && viewItem == session && listFocus"
             }
         ]
-    },
-    "scripts": {
-        "vscode:prepublish": "npm run package",
-        "build:webview": "vite build --config webview/acp-ui/vite.config.ts",
-        "dev:standalone": "concurrently --names FE,BE --prefix-colors cyan,yellow 'vite --config standalone/vite.config.ts' 'tsx --watch standalone/server.ts'",
-        "build": "npm run build:webview && node esbuild.mjs",
-        "watch": "node esbuild.mjs --watch",
-        "package": "npm run build:webview && node esbuild.mjs --production",
-        "check": "tsc --noEmit && tsc --noEmit -p webview/acp-ui/tsconfig.json && tsc --noEmit -p standalone/tsconfig.json",
-        "test": "vitest run",
-        "lint": "biome check .",
-        "lint:fix": "biome check --write .",
-        "format": "biome format --write .",
-        "verify": "concurrently --names Build,Check,Test,Lint 'npm run build' 'npm run check' 'npm run test' 'npm run lint'",
-        "publish:vscode": "bash scripts/publish.sh",
-        "sync:docs": "bash scripts/sync-docs.sh"
     },
     "dependencies": {
         "@agentclientprotocol/sdk": "^0.18.2",

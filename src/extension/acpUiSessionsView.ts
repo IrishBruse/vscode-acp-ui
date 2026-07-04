@@ -3,11 +3,13 @@ import {
     type Event,
     EventEmitter,
     type ExtensionContext,
+    RelativePattern,
     ThemeIcon,
     type TreeDataProvider,
     TreeItem,
     TreeItemCollapsibleState,
     window,
+    workspace,
 } from "vscode";
 import {
     getAcpAgentConfigByName,
@@ -19,11 +21,12 @@ import {
     openOrRevealAcpUiEditor,
     renameAcpUiSessionTitle,
 } from "./acpUiPanel";
-import { removeAcpUiPromptHistoryEntries } from "./acpUiPromptHistoryMemento";
+import { resolveSessionsDirectoryUri } from "./acpUiSessionJsonl";
 import {
     type AcpUiSessionRecord,
     getActiveAcpUiSessionId,
     listAcpUiSessions,
+    refreshAcpUiSessionsFromDisk,
     removeAcpUiSession,
     setActiveAcpUiSessionId,
     touchAcpUiSession,
@@ -104,9 +107,25 @@ export class AcpUiSessionsViewProvider
             }),
         );
 
+        const sessionsDir = resolveSessionsDirectoryUri(context);
+        const watcher = workspace.createFileSystemWatcher(
+            new RelativePattern(sessionsDir, "*.acp"),
+        );
+        const onDiskChange = (): void => {
+            void refreshAcpUiSessionsFromDisk().then(() => provider.refresh());
+        };
+        watcher.onDidCreate(onDiskChange);
+        watcher.onDidDelete(onDiskChange);
+        watcher.onDidChange(onDiskChange);
+        context.subscriptions.push(watcher);
+
         registerCommandIB(
             cmdRefreshAcpUiSessions,
-            () => provider.refresh(),
+            () => {
+                void refreshAcpUiSessionsFromDisk().then(() =>
+                    provider.refresh(),
+                );
+            },
             context,
         );
         registerCommandIB(
@@ -199,7 +218,7 @@ export class AcpUiSessionsViewProvider
             return;
         }
         touchAcpUiSession(sessionId);
-        openOrRevealAcpUiEditor(
+        await openOrRevealAcpUiEditor(
             this.extensionContext,
             sessionId,
             row.title,
@@ -224,9 +243,8 @@ export class AcpUiSessionsViewProvider
         if (answer !== "Delete") {
             return;
         }
-        disposeAcpUiEditorForSession(item.sessionId);
-        removeAcpUiPromptHistoryEntries(this.extensionContext, item.sessionId);
-        removeAcpUiSession(item.sessionId);
+        await disposeAcpUiEditorForSession(item.sessionId);
+        await removeAcpUiSession(item.sessionId);
         this.refresh();
     }
 
@@ -260,7 +278,7 @@ export class AcpUiSessionsViewProvider
         if (nextTitle === undefined) {
             return;
         }
-        if (!renameAcpUiSessionTitle(resolvedSessionId, nextTitle)) {
+        if (!(await renameAcpUiSessionTitle(resolvedSessionId, nextTitle))) {
             window.showErrorMessage("Rename failed");
             return;
         }
