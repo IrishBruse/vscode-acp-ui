@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import {
     type ExtensionContext,
     FileType,
+    type TextDocument,
     Uri,
     WorkspaceEdit,
     workspace,
@@ -138,6 +139,21 @@ export async function createSessionFile(
     return { id: header.id, uri, header };
 }
 
+async function applySessionFileEdit(
+    uri: Uri,
+    apply: (edit: WorkspaceEdit, doc: TextDocument) => void,
+    failureMessage: string,
+): Promise<void> {
+    const doc = await workspace.openTextDocument(uri);
+    const edit = new WorkspaceEdit();
+    apply(edit, doc);
+    const applied = await workspace.applyEdit(edit);
+    if (!applied) {
+        throw new Error(failureMessage);
+    }
+    await doc.save();
+}
+
 /**
  * Appends one replay event line to a session file.
  */
@@ -145,16 +161,16 @@ export async function appendSessionEvent(
     uri: Uri,
     event: AcpUiSessionReplayEvent,
 ): Promise<void> {
-    const doc = await workspace.openTextDocument(uri);
-    const edit = new WorkspaceEdit();
-    const text = doc.getText();
-    const suffix = text.length > 0 && !text.endsWith("\n") ? "\n" : "";
-    const insertPos = doc.positionAt(text.length);
-    edit.insert(uri, insertPos, `${suffix}${JSON.stringify(event)}\n`);
-    const applied = await workspace.applyEdit(edit);
-    if (!applied) {
-        throw new Error(`Failed to append session event to ${uri.fsPath}`);
-    }
+    await applySessionFileEdit(
+        uri,
+        (edit, doc) => {
+            const text = doc.getText();
+            const suffix = text.length > 0 && !text.endsWith("\n") ? "\n" : "";
+            const insertPos = doc.positionAt(text.length);
+            edit.insert(uri, insertPos, `${suffix}${JSON.stringify(event)}\n`);
+        },
+        `Failed to append session event to ${uri.fsPath}`,
+    );
 }
 
 /**
@@ -223,16 +239,17 @@ export async function updateSessionHeader(
         delete next.promptHistory;
     }
     const firstLine = doc.lineAt(0);
-    const edit = new WorkspaceEdit();
-    edit.replace(
+    await applySessionFileEdit(
         uri,
-        firstLine.rangeIncludingLineBreak,
-        `${serializeSessionHeader(next)}\n`,
+        (edit) => {
+            edit.replace(
+                uri,
+                firstLine.rangeIncludingLineBreak,
+                `${serializeSessionHeader(next)}\n`,
+            );
+        },
+        `Failed to update session header for ${uri.fsPath}`,
     );
-    const applied = await workspace.applyEdit(edit);
-    if (!applied) {
-        throw new Error(`Failed to update session header for ${uri.fsPath}`);
-    }
     return next;
 }
 
