@@ -2,7 +2,9 @@ import {
   type KeyboardEvent,
   type ReactElement,
   type RefObject,
+  useEffect,
   useMemo,
+  useRef,
 } from "react";
 import "./ChatComposer.css";
 import type { AcpUiSessionModelSelection } from "../../../../src/acp/session/sessionModels";
@@ -22,6 +24,8 @@ export type ChatComposerProps = {
   slashCommands: AcpUiSlashCommand[];
   workspaceFiles: string[];
   suggestionIndex: number;
+  /** When true, hide autocomplete until the draft changes. */
+  autocompleteDismissed: boolean;
   draft: string;
   onDraftChange: (value: string) => void;
   onPickSessionModel: (modelId: string) => void;
@@ -45,6 +49,7 @@ export function ChatComposer({
   slashCommands,
   workspaceFiles,
   suggestionIndex,
+  autocompleteDismissed,
   draft,
   onDraftChange,
   onPickSessionModel,
@@ -67,6 +72,10 @@ export function ChatComposer({
     autocomplete !== null
       ? wrapIndex(suggestionIndex, autocomplete.items.length)
       : 0;
+  const activeItemRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    activeItemRef.current?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, autocomplete?.items.length]);
   const modelSel = modelSelection;
   const modelReady = modelSel !== null && modelSel.availableModels.length > 0;
   const modelSelectDisabled =
@@ -135,7 +144,7 @@ export function ChatComposer({
         </div>
       </div>
       <div className="composer-input-wrap">
-        {autocomplete !== null ? (
+        {autocomplete !== null && !autocompleteDismissed ? (
           <div
             className="composer-slash-menu"
             role="listbox"
@@ -146,8 +155,10 @@ export function ChatComposer({
             {autocomplete.items.map((item, index) => (
               <button
                 key={item.key}
+                ref={index === activeIndex ? activeItemRef : undefined}
                 type="button"
                 role="option"
+                aria-selected={index === activeIndex}
                 className={
                   index === activeIndex
                     ? "composer-slash-item composer-slash-item--active"

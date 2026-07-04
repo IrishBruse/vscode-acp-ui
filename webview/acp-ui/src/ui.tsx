@@ -48,6 +48,7 @@ export function mountChatView(
             | { outcome: "cancelled" };
     }) => void,
     initialChatState?: ChatState,
+    postOpenNewChat?: () => void,
 ): ChatView {
     root.replaceChildren();
     root.className = "root agent-root";
@@ -67,6 +68,7 @@ export function mountChatView(
             postResetSession={postResetSession}
             postSetSessionModel={postSetSessionModel}
             postSavePromptHistory={postSavePromptHistory}
+            postOpenNewChat={postOpenNewChat}
             postPermissionResponse={postPermissionResponse}
             postCursorAskQuestionResponse={postCursorAskQuestionResponse}
             postCursorCreatePlanResponse={postCursorCreatePlanResponse}

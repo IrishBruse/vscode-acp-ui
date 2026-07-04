@@ -80,7 +80,9 @@ export type WebviewToExtensionMessage =
               | { outcome: "cancelled" };
       }
     /** Persists composer Arrow Up / Down prompt history for this session. */
-    | { type: "savePromptHistory"; entries: string[] };
+    | { type: "savePromptHistory"; entries: string[] }
+    /** Open a new chat with the default agent (extension host handles creation). */
+    | { type: "openNewChat" };
 
 /**
  * Messages sent from the extension host to a webview (or other UI host).
@@ -315,6 +317,9 @@ export function tryParseWebviewMessage(
             }
         }
         return { type: "savePromptHistory", entries };
+    }
+    if (messageType === "openNewChat") {
+        return { type: "openNewChat" };
     }
     return null;
 }

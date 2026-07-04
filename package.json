@@ -203,9 +203,35 @@
                 "command": "ib-acp-ui.showAcpRpcLog",
                 "title": "Show ACP RPC Log",
                 "category": "IrishBruse ACP"
+            },
+            {
+                "command": "ib-acp-ui.openAcpUiView",
+                "title": "Open ACP UI",
+                "shortTitle": "ACP UI",
+                "icon": "$(comment-discussion)",
+                "category": "IrishBruse ACP"
+            },
+            {
+                "command": "ib-acp-ui.openAcpUiTextEditor",
+                "title": "Open Text Editor",
+                "shortTitle": "Text Editor",
+                "icon": "$(file-text)",
+                "category": "IrishBruse ACP"
             }
         ],
         "menus": {
+            "editor/title": [
+                {
+                    "command": "ib-acp-ui.openAcpUiView",
+                    "when": "resourceExtname == '.acp' && activeCustomEditorId != 'ibAcpUi.session'",
+                    "group": "navigation"
+                },
+                {
+                    "command": "ib-acp-ui.openAcpUiTextEditor",
+                    "when": "activeCustomEditorId == 'ibAcpUi.session'",
+                    "group": "navigation"
+                }
+            ],
             "view/item/context": [
                 {
                     "command": "ib-acp-ui.deleteAcpUiSession",
@@ -237,6 +263,12 @@
             ]
         },
         "keybindings": [
+            {
+                "command": "ib-acp-ui.openChat",
+                "key": "ctrl+t",
+                "mac": "cmd+t",
+                "when": "activeCustomEditorId == 'ibAcpUi.session' || focusedView == 'acpUiSessionsView'"
+            },
             {
                 "command": "ib-acp-ui.renameAcpUiSession",
                 "key": "f2",

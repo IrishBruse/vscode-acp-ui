@@ -29,7 +29,7 @@ import {
   buildComposerAutocompleteState,
   wrapIndex,
 } from "./components/composerAutocomplete";
-import { shouldCancelRunOnCtrlC } from "./components/composerKeybindings";
+import { shouldCancelRunOnCtrlC, shouldOpenNewChatOnCtrlT } from "./components/composerKeybindings";
 import { CursorAskQuestionDialog } from "./components/CursorAskQuestionDialog";
 import { CursorCreatePlanDialog } from "./components/CursorCreatePlanDialog";
 import { PermissionDialog } from "./components/PermissionDialog";
@@ -49,6 +49,7 @@ export type AcpUiAppProps = {
   postResetSession: () => void;
   postSetSessionModel: (modelId: string) => void;
   postSavePromptHistory: (entries: string[]) => void;
+  postOpenNewChat?: () => void;
   postPermissionResponse: (
     payload:
       | { requestId: string; selectedOptionId: string }
@@ -88,6 +89,7 @@ export function AcpUiApp({
   postResetSession,
   postSetSessionModel,
   postSavePromptHistory,
+  postOpenNewChat,
   postPermissionResponse,
   postCursorAskQuestionResponse,
   postCursorCreatePlanResponse,
@@ -115,6 +117,8 @@ export function AcpUiApp({
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [fileDragActive, setFileDragActive] = useState(false);
   const [composerSuggestionIndex, setComposerSuggestionIndex] = useState(0);
+  const [composerAutocompleteDismissed, setComposerAutocompleteDismissed] =
+    useState(false);
 
   const scrollTraceToBottomIfPinned = useCallback((): void => {
     const el = traceRef.current;
@@ -165,6 +169,13 @@ export function AcpUiApp({
 
   useEffect(() => {
     const onDocumentKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if (shouldOpenNewChatOnCtrlT(event)) {
+        if (postOpenNewChat !== undefined) {
+          event.preventDefault();
+          postOpenNewChat();
+        }
+        return;
+      }
       if (
         event.key.toLowerCase() !== "o" ||
         (!event.ctrlKey && !event.metaKey)
@@ -186,7 +197,7 @@ export function AcpUiApp({
     return () => {
       document.removeEventListener("keydown", onDocumentKeyDown, true);
     };
-  }, []);
+  }, [postOpenNewChat]);
 
   const dropFilesDisabled =
     state.promptInFlight ||
@@ -261,6 +272,7 @@ export function AcpUiApp({
     setDraft(value);
     setPromptHistoryBrowse((browse) => (browse !== null ? null : browse));
     setComposerSuggestionIndex(0);
+    setComposerAutocompleteDismissed(false);
   }, []);
 
   const submit = (): void => {
@@ -336,6 +348,8 @@ export function AcpUiApp({
       slashCommands: mergedSlashCommands,
       workspaceFiles: init.workspaceFiles ?? [],
     });
+    const autocompleteActive =
+      autocomplete !== null && !composerAutocompleteDismissed;
     const hasSelection = start !== end;
 
     if (
@@ -354,13 +368,17 @@ export function AcpUiApp({
       return;
     }
 
-    if (autocomplete !== null && event.key === "Escape") {
+    if (autocompleteActive && event.key === "Escape") {
       event.preventDefault();
       setComposerSuggestionIndex(0);
+      setComposerAutocompleteDismissed(true);
       return;
     }
 
-    if (autocomplete !== null && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+    if (
+      autocompleteActive &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown")
+    ) {
       event.preventDefault();
       const delta = event.key === "ArrowDown" ? 1 : -1;
       setComposerSuggestionIndex((current) =>
@@ -369,7 +387,7 @@ export function AcpUiApp({
       return;
     }
 
-    if (autocomplete !== null && event.key === "Enter" && !event.shiftKey) {
+    if (autocompleteActive && event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       const nextIndex = wrapIndex(
         composerSuggestionIndex,
@@ -615,6 +633,7 @@ export function AcpUiApp({
             slashCommands={mergedSlashCommands}
             workspaceFiles={init.workspaceFiles ?? []}
             suggestionIndex={composerSuggestionIndex}
+            autocompleteDismissed={composerAutocompleteDismissed}
             draft={draft}
             onDraftChange={onDraftChange}
             onPickSessionModel={(modelId) => {

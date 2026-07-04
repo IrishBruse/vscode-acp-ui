@@ -1,7 +1,9 @@
 import {
     commands,
     type ExtensionContext,
+    TabInputCustom,
     TabInputText,
+    type Uri,
     ViewColumn,
     window,
 } from "vscode";
@@ -121,6 +123,71 @@ export function registerAcpUiPanel(
         "ib-acp-ui.newAcpUiFromTitleMenu",
         () => void openNewAcpUiWithAgentPicker(context, refreshChatsList),
         context,
+    );
+    registerCommandIB(
+        "ib-acp-ui.openAcpUiView",
+        () => void openActiveAcpFileInView(),
+        context,
+    );
+    registerCommandIB(
+        "ib-acp-ui.openAcpUiTextEditor",
+        () => void openActiveAcpFileInTextEditor(),
+        context,
+    );
+}
+
+function isAcpSessionUri(uri: Uri): boolean {
+    return uri.fsPath.endsWith(".acp");
+}
+
+function getActiveAcpFileUri(): Uri | undefined {
+    const textEditor = window.activeTextEditor;
+    if (textEditor !== undefined && isAcpSessionUri(textEditor.document.uri)) {
+        return textEditor.document.uri;
+    }
+
+    const tab = window.tabGroups.activeTabGroup.activeTab;
+    if (tab === undefined) {
+        return undefined;
+    }
+
+    const { input } = tab;
+    if (
+        input instanceof TabInputCustom &&
+        input.viewType === acpUiCustomEditorViewType &&
+        isAcpSessionUri(input.uri)
+    ) {
+        return input.uri;
+    }
+    if (input instanceof TabInputText && isAcpSessionUri(input.uri)) {
+        return input.uri;
+    }
+    return undefined;
+}
+
+async function openActiveAcpFileInView(): Promise<void> {
+    const uri = getActiveAcpFileUri();
+    if (uri === undefined) {
+        return;
+    }
+    await commands.executeCommand(
+        "vscode.openWith",
+        uri,
+        acpUiCustomEditorViewType,
+        ViewColumn.Active,
+    );
+}
+
+async function openActiveAcpFileInTextEditor(): Promise<void> {
+    const uri = getActiveAcpFileUri();
+    if (uri === undefined) {
+        return;
+    }
+    await commands.executeCommand(
+        "vscode.openWith",
+        uri,
+        "default",
+        ViewColumn.Active,
     );
 }
 

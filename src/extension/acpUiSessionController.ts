@@ -1,4 +1,5 @@
 import {
+    commands,
     type ExtensionContext,
     RelativePattern,
     type TextDocument,
@@ -298,6 +299,11 @@ export class AcpUiSessionController {
             if (header !== null) {
                 await this.sendBootstrapMessages(header);
             }
+            return;
+        }
+
+        if (parsed.type === "openNewChat") {
+            void commands.executeCommand("ib-acp-ui.openChat");
             return;
         }
 

@@ -73,6 +73,9 @@ function tryMountView(): void {
             host.post({ type: "cursorCreatePlanResponse", ...payload });
         },
         initialChatState,
+        () => {
+            host.post({ type: "openNewChat" });
+        },
     );
 }
 
