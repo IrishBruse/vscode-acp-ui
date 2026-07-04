@@ -324,7 +324,7 @@ export function ChatComposer({
       </div>
       <div className="composer-footer">
         <span className="composer-footer-hint-left">
-          / commands · @ files (Hold shift to drop)
+          / commands · @ files
         </span>
         <button
           type="button"
