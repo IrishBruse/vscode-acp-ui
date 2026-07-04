@@ -1,5 +1,13 @@
 import type { AcpUiSessionModelSelection } from "../acp/session/sessionModels";
 
+/** Replayable session log events (user submit + post-init extension messages). */
+export type AcpUiHistoryReplayEvent =
+    | { type: "submit"; body: string }
+    | Exclude<
+          ExtensionToWebviewMessage,
+          { type: "init" } | { type: "historyReplay" }
+      >;
+
 /** Plan entry forwarded from an ACP agent plan update. */
 export type PlanEntry = {
     content: string;
@@ -185,7 +193,9 @@ export type ExtensionToWebviewMessage =
     | { type: "turnComplete"; stopReason: string }
     | { type: "error"; message: string }
     /** Clears the transcript and tool state; sent before the host reconnects the agent session. */
-    | { type: "sessionReset" };
+    | { type: "sessionReset" }
+    /** Replays persisted session log lines after `init` (custom editor restore). */
+    | { type: "historyReplay"; events: AcpUiHistoryReplayEvent[] };
 
 /**
  * True when `raw` is a non-null object (`typeof null === "object"` is excluded).
