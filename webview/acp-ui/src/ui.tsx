@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { createRoot } from "react-dom/client";
-import type { ExtensionMessageAfterInit, InitPayload } from "./chatReducer";
+import type { ChatState, ExtensionMessageAfterInit, InitPayload } from "./chatReducer";
 import { AcpUiApp } from "./AcpUiApp";
 
 export type { ExtensionMessageAfterInit, InitPayload } from "./chatReducer";
@@ -47,6 +47,7 @@ export function mountChatView(
             | { outcome: "rejected"; reason?: string }
             | { outcome: "cancelled" };
     }) => void,
+    initialChatState?: ChatState,
 ): ChatView {
     root.replaceChildren();
     root.className = "root agent-root";
@@ -59,6 +60,7 @@ export function mountChatView(
     reactRoot.render(
         <AcpUiApp
             init={init}
+            initialChatState={initialChatState}
             postSend={postSend}
             postCancel={postCancel}
             postRenameSession={postRenameSession}

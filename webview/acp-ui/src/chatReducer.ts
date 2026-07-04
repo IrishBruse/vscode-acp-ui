@@ -574,3 +574,19 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return state;
     }
 }
+
+/**
+ * Replays persisted session log events onto the initial state from `init`.
+ */
+export function replayChatState(
+    init: InitPayload,
+    events: Array<
+        ExtensionMessageAfterInit | { type: "submit"; body: string }
+    >,
+): ChatState {
+    let state = createChatStateFromInit(init);
+    for (const event of events) {
+        state = chatReducer(state, event as ChatAction);
+    }
+    return state;
+}

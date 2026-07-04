@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
     chatReducer,
+    createChatStateFromInit,
     createInitialChatState,
     joinThoughtChunks,
+    replayChatState,
 } from "./chatReducer";
 
 describe("chatReducer", () => {
@@ -98,5 +100,23 @@ describe("chatReducer", () => {
         expect(row.title).toBe("Write File");
         expect(row.kind).toBe("edit");
         expect(row.subtitle).toContain("test.txt");
+    });
+
+    it("replays submit and agent text from persisted events", () => {
+        const init = {
+            type: "init" as const,
+            sessionId: "s1",
+            title: "Chat",
+        };
+        const state = replayChatState(init, [
+            { type: "submit", body: "hello" },
+            { type: "appendAgentText", text: "hi there" },
+            { type: "turnComplete", stopReason: "end" },
+        ]);
+        expect(state.trace).toEqual([
+            { type: "user", text: "hello" },
+            { type: "agent", text: "hi there" },
+        ]);
+        expect(state.promptInFlight).toBe(false);
     });
 });

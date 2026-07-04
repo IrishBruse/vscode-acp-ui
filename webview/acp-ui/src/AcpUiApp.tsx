@@ -19,6 +19,7 @@ import {
   type ChatAction,
   chatReducer,
   createChatStateFromInit,
+  type ChatState,
   type ExtensionMessageAfterInit,
   type InitPayload,
   type TraceItem,
@@ -41,6 +42,7 @@ import {
 
 export type AcpUiAppProps = {
   init: InitPayload;
+  initialChatState?: ChatState;
   postSend: (body: string) => void;
   postCancel: () => void;
   postRenameSession: (title: string) => void;
@@ -79,6 +81,7 @@ export type AcpUiAppProps = {
  */
 export function AcpUiApp({
   init,
+  initialChatState,
   postSend,
   postCancel,
   postRenameSession,
@@ -92,8 +95,9 @@ export function AcpUiApp({
 }: AcpUiAppProps): ReactElement {
   const [state, dispatch] = useReducer(
     chatReducer,
-    init,
-    createChatStateFromInit,
+    { init, initialChatState },
+    ({ init: initPayload, initialChatState: replayed }) =>
+      replayed ?? createChatStateFromInit(initPayload),
   );
   const [draft, setDraft] = useState("");
   const [promptHistory, setPromptHistory] = useState<string[]>(
