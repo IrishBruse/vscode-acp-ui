@@ -4,6 +4,7 @@ import type {
     ToolCallDiffRow,
     ToolCallStatus,
 } from "../../protocol/extensionHostMessages";
+import { sessionConfigOptionsFromAgent } from "../session/sessionConfigOptions";
 import { computeToolCallDiffRows } from "./toolCallDiffLines";
 
 const maxToolDisplayChars = 120_000;
@@ -782,9 +783,21 @@ export function sessionUpdateToWebviewMessages(
                     })),
                 },
             ];
+        case "config_option_update": {
+            const normalized = sessionConfigOptionsFromAgent(
+                update.configOptions,
+            );
+            if (normalized === null) {
+                return [];
+            }
+            return [
+                {
+                    type: "sessionConfigOptions",
+                    options: normalized.options,
+                },
+            ];
+        }
         default:
-            console.log();
-
             return [];
     }
 }

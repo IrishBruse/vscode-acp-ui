@@ -7,15 +7,30 @@ import {
   useRef,
 } from "react";
 import "./ChatComposer.css";
+import {
+  buildModelPickerState,
+  formatModelDisplayName,
+  parseModelIdBracketParams,
+  pickVariantForGroup,
+} from "../../../../src/acp/session/modelVariantPicker";
 import type { AcpUiSessionModelSelection } from "../../../../src/acp/session/sessionModels";
+import {
+  groupedModelChoices,
+  modelConfigOption,
+  modelParameterOptions,
+  pickModelOptionForFamily,
+} from "../../../../src/acp/session/sessionConfigOptions";
+import type { AcpUiSessionConfigOption } from "../../../../src/acp/session/sessionConfigOptions";
 import type { AcpUiSlashCommand } from "../../../../src/protocol/extensionHostMessages";
 import { buildComposerAutocompleteState, wrapIndex } from "./composerAutocomplete";
+import { ModelConfigPopover } from "./ModelConfigPopover";
 
 export type ChatComposerProps = {
   activityLabel: string | null;
   /** Shown in the activity slot when nothing is in flight (e.g. workspace cwd). */
   workspacePathHint: string;
   modelSelection: AcpUiSessionModelSelection | null;
+  sessionConfigOptions: AcpUiSessionConfigOption[] | null;
   /** When true, model is shown as a label (standalone: after the first message). */
   modelPickerLocked: boolean;
   promptInFlight: boolean;
@@ -29,6 +44,10 @@ export type ChatComposerProps = {
   draft: string;
   onDraftChange: (value: string) => void;
   onPickSessionModel: (modelId: string) => void;
+  onPickSessionConfigOption: (
+    configId: string,
+    value: string | boolean,
+  ) => void;
   onSubmit: () => void;
   onCancel: () => void;
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -43,6 +62,7 @@ export function ChatComposer({
   activityLabel,
   workspacePathHint,
   modelSelection,
+  sessionConfigOptions,
   modelPickerLocked,
   promptInFlight,
   inputBlocked,
@@ -53,6 +73,7 @@ export function ChatComposer({
   draft,
   onDraftChange,
   onPickSessionModel,
+  onPickSessionConfigOption,
   onSubmit,
   onCancel,
   onKeyDown,
@@ -76,16 +97,69 @@ export function ChatComposer({
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: "nearest" });
   }, [activeIndex, autocomplete?.items.length]);
+  const configModelOption = useMemo(
+    () =>
+      modelConfigOption(
+        sessionConfigOptions !== null
+          ? { options: sessionConfigOptions }
+          : null,
+      ),
+    [sessionConfigOptions],
+  );
+  const configModelGroups = useMemo(
+    () =>
+      configModelOption !== undefined
+        ? groupedModelChoices(configModelOption)
+        : [],
+    [configModelOption],
+  );
+  const configParamOptions = useMemo(
+    () =>
+      modelParameterOptions(
+        sessionConfigOptions !== null
+          ? { options: sessionConfigOptions }
+          : null,
+      ),
+    [sessionConfigOptions],
+  );
+  const useConfigModelPicker = configModelOption !== undefined;
   const modelSel = modelSelection;
-  const modelReady = modelSel !== null && modelSel.availableModels.length > 0;
+  const modelReady =
+    useConfigModelPicker ||
+    (modelSel !== null && modelSel.availableModels.length > 0);
   const modelSelectDisabled =
     modelPickerLocked || textareaDisabled || !modelReady;
-  const modelLabel =
-    modelReady && modelSel !== null
-      ? (modelSel.availableModels.find(
-          (m) => m.modelId === modelSel.currentModelId,
-        )?.name ?? modelSel.currentModelId)
-      : "";
+  const modelPickerState = useMemo(() => {
+    if (useConfigModelPicker || !modelReady || modelSel === null) {
+      return null;
+    }
+    return buildModelPickerState(
+      modelSel.availableModels,
+      modelSel.currentModelId,
+    );
+  }, [useConfigModelPicker, modelReady, modelSel]);
+  const configCurrentGroupName = useMemo(() => {
+    if (configModelOption === undefined) {
+      return "";
+    }
+    const currentChoice = configModelOption.options.find(
+      (choice) => choice.value === configModelOption.currentValue,
+    );
+    if (currentChoice !== undefined) {
+      return currentChoice.name;
+    }
+    return parseModelIdBracketParams(configModelOption.currentValue).base;
+  }, [configModelOption]);
+  const modelLabel = useConfigModelPicker
+    ? formatModelDisplayName(
+        configCurrentGroupName,
+        configModelOption?.currentValue ?? "",
+      )
+    : (modelPickerState?.currentGroupLabel ?? "");
+  const currentVariantLabel =
+    modelPickerState?.currentVariants.find(
+      (variant) => variant.modelId === modelPickerState?.currentModelId,
+    )?.label ?? "";
 
   const inflight =
     activityLabel !== null && activityLabel.length > 0;
@@ -108,38 +182,123 @@ export function ChatComposer({
         <div className="composer-top-bar-right">
           <span className="composer-inline-label">Model</span>
           {modelPickerLocked ? (
-            <span
-              className="composer-pick-value"
-              title={modelLabel}
-              aria-label={`Model: ${modelLabel}`}
-            >
-              {modelLabel.length > 0 ? modelLabel : "\u2014"}
-            </span>
+            <>
+              <span
+                className="composer-pick-value"
+                title={modelLabel}
+                aria-label={`Model: ${modelLabel}`}
+              >
+                {modelLabel.length > 0 ? modelLabel : "\u2014"}
+              </span>
+              {modelPickerState?.showVariantPicker === true ? (
+                <span
+                  className="composer-pick-value"
+                  title={currentVariantLabel}
+                  aria-label={`Model variant: ${currentVariantLabel}`}
+                >
+                  {currentVariantLabel}
+                </span>
+              ) : null}
+            </>
           ) : (
-            <select
-              id="acp-ui-model-select"
-              className="composer-model-select"
-              aria-label="Model"
-              value={
-                modelReady && modelSel !== null ? modelSel.currentModelId : ""
-              }
-              disabled={modelSelectDisabled}
-              onChange={(e) => {
-                onPickSessionModel(e.target.value);
-              }}
-            >
-              {modelReady && modelSel !== null ? (
-                modelSel.availableModels.map((m) => (
-                  <option key={m.modelId} value={m.modelId}>
-                    {m.name}
-                  </option>
-                ))
+            <>
+              {useConfigModelPicker && configModelOption !== undefined ? (
+                <select
+                  id="acp-ui-model-select"
+                  className="composer-model-select"
+                  aria-label="Model"
+                  value={configCurrentGroupName}
+                  disabled={modelSelectDisabled}
+                  onChange={(e) => {
+                    const preferredParams = parseModelIdBracketParams(
+                      configModelOption.currentValue,
+                    ).params;
+                    const nextModelId = pickModelOptionForFamily(
+                      configModelOption,
+                      e.target.value,
+                      preferredParams,
+                    );
+                    onPickSessionConfigOption(
+                      configModelOption.configId,
+                      nextModelId,
+                    );
+                  }}
+                >
+                  {configModelGroups.map((group) => (
+                    <option key={group.name} value={group.name}>
+                      {group.label}
+                    </option>
+                  ))}
+                </select>
               ) : (
-                <option value="" disabled>
-                  {"\u2014"}
-                </option>
+                <select
+                  id="acp-ui-model-select"
+                  className="composer-model-select"
+                  aria-label="Model"
+                  value={modelPickerState?.currentGroupName ?? ""}
+                  disabled={modelSelectDisabled}
+                  onChange={(e) => {
+                    if (modelSel === null || modelPickerState === null) {
+                      return;
+                    }
+                    const group = modelPickerState.groups.find(
+                      (entry) => entry.name === e.target.value,
+                    );
+                    if (group === undefined || group.variants.length === 0) {
+                      return;
+                    }
+                    const preferredParams = parseModelIdBracketParams(
+                      modelSel.currentModelId,
+                    ).params;
+                    const variants = group.variants.map((variant) => ({
+                      modelId: variant.modelId,
+                      params: parseModelIdBracketParams(variant.modelId).params,
+                    }));
+                    onPickSessionModel(
+                      pickVariantForGroup(variants, preferredParams),
+                    );
+                  }}
+                >
+                  {modelPickerState !== null ? (
+                    modelPickerState.groups.map((group) => (
+                      <option key={group.name} value={group.name}>
+                        {group.label}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="" disabled>
+                      {"\u2014"}
+                    </option>
+                  )}
+                </select>
               )}
-            </select>
+              {configParamOptions.length > 0 ? (
+                <ModelConfigPopover
+                  options={configParamOptions}
+                  disabled={modelSelectDisabled}
+                  onPick={onPickSessionConfigOption}
+                />
+              ) : null}
+              {!useConfigModelPicker &&
+              modelPickerState?.showVariantPicker === true ? (
+                <select
+                  id="acp-ui-model-variant-select"
+                  className="composer-model-select composer-model-variant-select"
+                  aria-label="Model variant"
+                  value={modelPickerState.currentModelId}
+                  disabled={modelSelectDisabled}
+                  onChange={(e) => {
+                    onPickSessionModel(e.target.value);
+                  }}
+                >
+                  {modelPickerState.currentVariants.map((variant) => (
+                    <option key={variant.modelId} value={variant.modelId}>
+                      {variant.label}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </>
           )}
         </div>
       </div>

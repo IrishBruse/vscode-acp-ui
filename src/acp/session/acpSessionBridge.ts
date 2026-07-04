@@ -14,6 +14,12 @@ import {
 } from "../mapping/sessionUpdateMapping";
 import type { AcpHostFilesystem } from "../ports/hostFilesystem";
 import type { AcpRpcNdjsonSink } from "../ports/rpcNdjsonSink";
+import { parseModelIdBracketParams } from "./modelVariantPicker";
+import {
+    type AcpUiSessionConfigState,
+    resolveAdvertisedModelOptionValue,
+    sessionConfigOptionsFromAgent,
+} from "./sessionConfigOptions";
 import {
     type AcpUiSessionModelSelection,
     sessionModelStateToAcpUiSelection,
@@ -41,6 +47,7 @@ export class AcpSessionBridge {
     private acpSessionId: string | null = null;
     private prompting = false;
     private lastModelSelection: AcpUiSessionModelSelection | null = null;
+    private lastConfigOptions: AcpUiSessionConfigState | null = null;
     private toolCallKindTracking = createToolCallKindTracking();
     private nextPermissionRequestId = 0;
     private permissionWaiters = new Map<
@@ -457,7 +464,12 @@ export class AcpSessionBridge {
         await this.ensureAuthenticated(init);
         const result = await this.newSessionWithAuthRetry(init);
         this.acpSessionId = result.sessionId;
-        if (result.models) {
+        if (
+            result.configOptions !== undefined &&
+            result.configOptions !== null
+        ) {
+            this.applyConfigOptions(result.configOptions);
+        } else if (result.models) {
             let state = result.models;
             if (
                 preferredModelId !== undefined &&
@@ -475,6 +487,28 @@ export class AcpSessionBridge {
             this.lastModelSelection = selection;
             this.postToWebview({ type: "sessionModels", ...selection });
         }
+        if (
+            result.configOptions !== undefined &&
+            result.configOptions !== null &&
+            result.models &&
+            preferredModelId !== undefined
+        ) {
+            const modelOption = this.lastConfigOptions?.options.find(
+                (option) =>
+                    option.type === "select" && option.category === "model",
+            );
+            if (
+                modelOption?.type === "select" &&
+                preferredModelId !== modelOption.currentValue
+            ) {
+                try {
+                    await this.setSessionConfigOption(
+                        modelOption.configId,
+                        preferredModelId,
+                    );
+                } catch {}
+            }
+        }
     }
 
     /** Updates the session model when the agent supports `session/set_model`. */
@@ -482,14 +516,135 @@ export class AcpSessionBridge {
         if (!this.acpSessionId) {
             return;
         }
-        await this.agentProcess.setSessionModel(this.acpSessionId, modelId);
+        const modelConfig = this.lastConfigOptions?.options.find(
+            (option) => option.type === "select" && option.category === "model",
+        );
+        if (modelConfig?.type === "select") {
+            const advertised = resolveAdvertisedModelOptionValue(
+                modelConfig,
+                modelId,
+            );
+            if (advertised === null) {
+                throw new Error(
+                    "The selected model variant is not available from the agent.",
+                );
+            }
+            await this.setSessionConfigOption(modelConfig.configId, advertised);
+            return;
+        }
+        const advertisedId = this.resolveUnstableModelId(modelId);
+        if (advertisedId === null) {
+            throw new Error(
+                "The selected model variant is not available from the agent.",
+            );
+        }
+        await this.agentProcess.setSessionModel(
+            this.acpSessionId,
+            advertisedId,
+        );
         if (this.lastModelSelection !== null) {
             const next: AcpUiSessionModelSelection = {
                 ...this.lastModelSelection,
-                currentModelId: modelId,
+                currentModelId: advertisedId,
             };
             this.lastModelSelection = next;
             this.postToWebview({ type: "sessionModels", ...next });
+        }
+    }
+
+    /** Updates a session config option via `session/set_config_option`. */
+    async setSessionConfigOption(
+        configId: string,
+        value: string | boolean,
+    ): Promise<void> {
+        if (!this.acpSessionId) {
+            return;
+        }
+        let wireValue: string | boolean = value;
+        if (typeof value === "string") {
+            const modelConfig = this.lastConfigOptions?.options.find(
+                (option) =>
+                    option.type === "select" && option.category === "model",
+            );
+            if (
+                modelConfig?.type === "select" &&
+                configId === modelConfig.configId
+            ) {
+                const resolved = resolveAdvertisedModelOptionValue(
+                    modelConfig,
+                    value,
+                );
+                if (resolved === null) {
+                    throw new Error(
+                        "The selected model variant is not available from the agent.",
+                    );
+                }
+                wireValue = resolved;
+            }
+        }
+        const response = await this.agentProcess.setSessionConfigOption(
+            typeof wireValue === "boolean"
+                ? {
+                      sessionId: this.acpSessionId,
+                      configId,
+                      type: "boolean",
+                      value: wireValue,
+                  }
+                : {
+                      sessionId: this.acpSessionId,
+                      configId,
+                      value: wireValue,
+                  },
+        );
+        this.applyConfigOptions(response.configOptions);
+    }
+
+    private resolveUnstableModelId(modelId: string): string | null {
+        const available = this.lastModelSelection?.availableModels ?? [];
+        if (available.some((model) => model.modelId === modelId)) {
+            return modelId;
+        }
+        const candidate = parseModelIdBracketParams(modelId);
+        const keys = Object.keys(candidate.params).sort();
+        const signature = JSON.stringify(candidate.params, keys);
+        const match = available.find((model) => {
+            const parsed = parseModelIdBracketParams(model.modelId);
+            return (
+                parsed.base === candidate.base &&
+                JSON.stringify(
+                    parsed.params,
+                    Object.keys(parsed.params).sort(),
+                ) === signature
+            );
+        });
+        return match?.modelId ?? null;
+    }
+
+    private applyConfigOptions(
+        raw: ReadonlyArray<acp.SessionConfigOption>,
+    ): void {
+        const normalized = sessionConfigOptionsFromAgent(raw);
+        this.lastConfigOptions = normalized;
+        if (normalized !== null) {
+            this.postToWebview({
+                type: "sessionConfigOptions",
+                options: normalized.options,
+            });
+            const modelOption = normalized.options.find(
+                (option) =>
+                    option.type === "select" && option.category === "model",
+            );
+            if (modelOption?.type === "select") {
+                const selection: AcpUiSessionModelSelection = {
+                    currentModelId: modelOption.currentValue,
+                    availableModels: modelOption.options.map((choice) => ({
+                        modelId: choice.value,
+                        name: choice.name,
+                    })),
+                };
+                this.lastModelSelection = selection;
+                this.postToWebview({ type: "sessionModels", ...selection });
+            }
         }
     }
 

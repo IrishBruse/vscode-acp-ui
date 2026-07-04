@@ -1,3 +1,4 @@
+import type { AcpUiSessionConfigOption } from "../acp/session/sessionConfigOptions";
 import type { AcpUiSessionModelSelection } from "../acp/session/sessionModels";
 
 /** Replayable session log events (user submit + post-init extension messages). */
@@ -50,6 +51,11 @@ export type WebviewToExtensionMessage =
     /** Dispose the current agent session and start a fresh one (same editor / WS connection). */
     | { type: "resetSession" }
     | { type: "setSessionModel"; modelId: string }
+    | {
+          type: "setSessionConfigOption";
+          configId: string;
+          value: string | boolean;
+      }
     | { type: "setSessionAgent"; agentName: string }
     | {
           type: "permissionResponse";
@@ -113,6 +119,10 @@ export type ExtensionToWebviewMessage =
           type: "sessionModels";
           currentModelId: string;
           availableModels: AcpUiSessionModelSelection["availableModels"];
+      }
+    | {
+          type: "sessionConfigOptions";
+          options: AcpUiSessionConfigOption[];
       }
     | {
           type: "acpAgentSelection";
@@ -240,6 +250,18 @@ export function tryParseWebviewMessage(
         record.modelId.length > 0
     ) {
         return { type: "setSessionModel", modelId: record.modelId };
+    }
+    if (
+        messageType === "setSessionConfigOption" &&
+        typeof record.configId === "string" &&
+        record.configId.length > 0 &&
+        (typeof record.value === "string" || typeof record.value === "boolean")
+    ) {
+        return {
+            type: "setSessionConfigOption",
+            configId: record.configId,
+            value: record.value,
+        };
     }
     if (
         messageType === "setSessionAgent" &&

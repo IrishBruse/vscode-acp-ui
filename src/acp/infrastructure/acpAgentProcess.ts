@@ -237,6 +237,15 @@ export class AcpAgentProcess {
         await this.connection.unstable_setSessionModel({ sessionId, modelId });
     }
 
+    async setSessionConfigOption(
+        params: acp.SetSessionConfigOptionRequest,
+    ): Promise<acp.SetSessionConfigOptionResponse> {
+        if (!this.connection) {
+            throw new Error("Agent not started");
+        }
+        return this.connection.setSessionConfigOption(params);
+    }
+
     async prompt(sessionId: string, text: string): Promise<acp.PromptResponse> {
         if (!this.connection) {
             throw new Error("Agent not started");

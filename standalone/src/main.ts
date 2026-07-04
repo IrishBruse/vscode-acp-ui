@@ -141,6 +141,9 @@ host.onExtensionMessage((message: ExtensionToWebviewMessage) => {
             (modelId) => {
                 host.post({ type: "setSessionModel", modelId });
             },
+            (configId, value) => {
+                host.post({ type: "setSessionConfigOption", configId, value });
+            },
             (entries) => {
                 saveStandalonePromptHistory(workspaceLabel, entries);
                 host.post({ type: "savePromptHistory", entries });

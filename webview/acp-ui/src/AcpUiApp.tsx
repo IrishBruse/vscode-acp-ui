@@ -14,6 +14,11 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  composeModelIdAfterDerivedChange,
+  isDerivedConfigId,
+  modelConfigOption,
+} from "../../../src/acp/session/sessionConfigOptions";
 import type { AcpUiSlashCommand } from "../../../src/protocol/extensionHostMessages";
 import {
   type ChatAction,
@@ -48,6 +53,10 @@ export type AcpUiAppProps = {
   postRenameSession: (title: string) => void;
   postResetSession: () => void;
   postSetSessionModel: (modelId: string) => void;
+  postSetSessionConfigOption: (
+    configId: string,
+    value: string | boolean,
+  ) => void;
   postSavePromptHistory: (entries: string[]) => void;
   postOpenNewChat?: () => void;
   postPermissionResponse: (
@@ -88,6 +97,7 @@ export function AcpUiApp({
   postRenameSession,
   postResetSession,
   postSetSessionModel,
+  postSetSessionConfigOption,
   postSavePromptHistory,
   postOpenNewChat,
   postPermissionResponse,
@@ -623,6 +633,7 @@ export function AcpUiApp({
             activityLabel={activityLabel}
             workspacePathHint={workspaceText}
             modelSelection={state.modelSelection}
+            sessionConfigOptions={state.sessionConfigOptions}
             modelPickerLocked={state.composerPicksLocked}
             promptInFlight={state.promptInFlight}
             inputBlocked={
@@ -639,6 +650,39 @@ export function AcpUiApp({
             onPickSessionModel={(modelId) => {
               dispatch({ type: "pickSessionModel", modelId });
               postSetSessionModel(modelId);
+            }}
+            onPickSessionConfigOption={(configId, value) => {
+              const modelOption = modelConfigOption(
+                state.sessionConfigOptions !== null
+                  ? { options: state.sessionConfigOptions }
+                  : null,
+              );
+              if (
+                modelOption !== undefined &&
+                isDerivedConfigId(configId) &&
+                typeof value === "string"
+              ) {
+                const nextModelId = composeModelIdAfterDerivedChange(
+                  modelOption,
+                  configId,
+                  value,
+                );
+                if (nextModelId !== null) {
+                  dispatch({
+                    type: "pickSessionConfigOption",
+                    configId: modelOption.configId,
+                    value: nextModelId,
+                  });
+                  postSetSessionConfigOption(
+                    modelOption.configId,
+                    nextModelId,
+                  );
+                  return;
+                }
+                return;
+              }
+              dispatch({ type: "pickSessionConfigOption", configId, value });
+              postSetSessionConfigOption(configId, value);
             }}
             onSubmit={submit}
             onCancel={postCancel}

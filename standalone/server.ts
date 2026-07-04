@@ -416,6 +416,25 @@ wss.on("connection", (ws: WebSocket) => {
             return;
         }
 
+        if (parsed.type === "setSessionConfigOption") {
+            if (bridge) {
+                try {
+                    await bridge.setSessionConfigOption(
+                        parsed.configId,
+                        parsed.value,
+                    );
+                } catch (err: unknown) {
+                    const message =
+                        err instanceof Error ? err.message : String(err);
+                    send({
+                        type: "error",
+                        message: `Config change failed: ${message}`,
+                    });
+                }
+            }
+            return;
+        }
+
         if (parsed.type === "send") {
             const fixturePath = resolveFixture(parsed.body);
             if (fixturePath !== null) {

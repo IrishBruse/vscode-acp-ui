@@ -393,6 +393,29 @@ export class AcpUiSessionController {
             return;
         }
 
+        if (parsed.type === "setSessionConfigOption") {
+            void (async () => {
+                const b = this.bridge;
+                if (b === undefined) {
+                    return;
+                }
+                try {
+                    await b.setSessionConfigOption(
+                        parsed.configId,
+                        parsed.value,
+                    );
+                } catch (err: unknown) {
+                    const msg =
+                        err instanceof Error ? err.message : String(err);
+                    this.post({
+                        type: "error",
+                        message: `Config change failed: ${msg}`,
+                    });
+                }
+            })();
+            return;
+        }
+
         if (parsed.type === "setSessionAgent") {
             const config = getAcpAgentConfigByName(parsed.agentName);
             if (config === undefined) {

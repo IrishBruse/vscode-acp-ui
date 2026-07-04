@@ -60,6 +60,9 @@ function tryMountView(): void {
         (modelId) => {
             host.post({ type: "setSessionModel", modelId });
         },
+        (configId, value) => {
+            host.post({ type: "setSessionConfigOption", configId, value });
+        },
         (entries) => {
             host.post({ type: "savePromptHistory", entries });
         },

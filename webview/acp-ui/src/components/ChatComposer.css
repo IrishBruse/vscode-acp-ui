@@ -104,6 +104,10 @@
     font-size: 11px;
 }
 
+.composer-model-variant-select {
+    max-width: 9rem;
+}
+
 .composer-input-wrap {
     position: relative;
     overflow: visible;

@@ -1,4 +1,5 @@
 import type { AcpUiSessionModelSelection } from "../../../src/acp/session/sessionModels";
+import type { AcpUiSessionConfigOption } from "../../../src/acp/session/sessionConfigOptions";
 import type {
     ExtensionToWebviewMessage,
     AcpUiSlashCommand,
@@ -63,6 +64,7 @@ export type ChatState = {
     promptInFlight: boolean;
     errorText: string | null;
     modelSelection: AcpUiSessionModelSelection | null;
+    sessionConfigOptions: AcpUiSessionConfigOption[] | null;
     acpAgentSelection: AcpAgentSelectionState | null;
     slashCommands: AcpUiSlashCommand[];
     permissionPrompt: PermissionPromptState | null;
@@ -82,6 +84,11 @@ export type ChatAction =
     | ExtensionMessageAfterInit
     | { type: "submit"; body: string }
     | { type: "pickSessionModel"; modelId: string }
+    | {
+          type: "pickSessionConfigOption";
+          configId: string;
+          value: string | boolean;
+      }
     | { type: "clearPermissionPrompt" }
     | { type: "clearAskQuestionPrompt" }
     | { type: "clearCreatePlanPrompt" };
@@ -100,6 +107,36 @@ function toolDisplayTitle(
     return t.length > 0 ? t : "Tool";
 }
 
+function modelSelectionFromConfigOptions(
+    options: AcpUiSessionConfigOption[],
+): AcpUiSessionModelSelection | null {
+    const modelOption = options.find(
+        (option) => option.type === "select" && option.category === "model",
+    );
+    if (modelOption?.type !== "select") {
+        return null;
+    }
+    return {
+        currentModelId: modelOption.currentValue,
+        availableModels: modelOption.options.map((choice) => ({
+            modelId: choice.value,
+            name: choice.name,
+        })),
+    };
+}
+
+function applySessionConfigOptions(
+    state: ChatState,
+    options: AcpUiSessionConfigOption[],
+): ChatState {
+    const modelSelection = modelSelectionFromConfigOptions(options);
+    return {
+        ...state,
+        sessionConfigOptions: options,
+        ...(modelSelection !== null ? { modelSelection } : {}),
+    };
+}
+
 export function createInitialChatState(): ChatState {
     return {
         trace: [],
@@ -108,6 +145,7 @@ export function createInitialChatState(): ChatState {
         promptInFlight: false,
         errorText: null,
         modelSelection: null,
+        sessionConfigOptions: null,
         acpAgentSelection: null,
         slashCommands: [],
         permissionPrompt: null,
@@ -444,6 +482,31 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             },
         };
     }
+    if (action.type === "pickSessionConfigOption") {
+        if (state.composerPicksLocked || state.sessionConfigOptions === null) {
+            return state;
+        }
+        const nextOptions = state.sessionConfigOptions.map((option) => {
+            if (option.configId !== action.configId) {
+                return option;
+            }
+            if (option.type === "boolean") {
+                return {
+                    ...option,
+                    currentValue:
+                        typeof action.value === "boolean"
+                            ? action.value
+                            : action.value === "true",
+                };
+            }
+            return {
+                ...option,
+                currentValue:
+                    typeof action.value === "string" ? action.value : option.currentValue,
+            };
+        });
+        return applySessionConfigOptions(state, nextOptions);
+    }
     if (action.type === "clearPermissionPrompt") {
         return { ...state, permissionPrompt: null };
     }
@@ -464,6 +527,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
                     availableModels: action.availableModels,
                 },
             };
+        case "sessionConfigOptions":
+            return applySessionConfigOptions(state, action.options);
         case "acpAgentSelection":
             return {
                 ...state,
