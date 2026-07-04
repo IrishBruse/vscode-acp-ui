@@ -1,5 +1,36 @@
 # ACP Divergence Report
 
+## Full coverage checklist
+
+- [ ] **Authentication** -- call `authenticate` / `logout` when `initialize` returns `authMethods`
+- [ ] **Session resume** -- call `session/load` on chat open when agent advertises `loadSession` and a runtime `sessionId` exists
+- [ ] **Session list** -- call `session/list` when agent advertises the capability
+- [ ] **Session delete** -- call `session/delete` when user deletes a local chat and agent advertises the capability
+- [ ] **Terminal capability** -- advertise `terminal: true` and implement `createTerminal` (VS Code terminal API)
+- [ ] **MCP servers** -- forward `mcpServers` from `.cursor/mcp.json` or settings on `session/new` and `session/load`
+- [ ] **`user_message_chunk`** -- map replay chunks during `session/load`
+- [ ] **`current_mode_update`** -- handle mode changes and expose mode in composer
+- [ ] **`config_option_update`** -- handle session config options (successor to modes)
+- [ ] **`session_info_update`** -- sync agent-driven title and metadata
+- [ ] **`usage_update`** -- show token / cost / context window usage
+- [ ] **`clientInfo`** -- send `name`, `version`, and optional `title` on `initialize`
+- [ ] **Version mismatch UI** -- surface incompatible protocol versions to the user
+- [ ] **Multimodal prompts** -- send `image`, `audio`, `resource`, and embedded context when agent advertises `promptCapabilities`
+- [ ] **Structured `@` mentions** -- send `resource` blocks for composer file mentions, not only path text
+- [ ] **Unsaved buffer reads** -- `readTextFile` reflects open editor buffers, not only on-disk content
+- [ ] **`line` / `limit` on read** -- support partial file reads per v1 schema
+- [ ] **ENOENT semantics** -- decide whether to keep empty-string workaround or align with spec error responses
+- [ ] **JSONL persistence** -- wire `acpUiSessionJsonl` append and `historyReplay` into `acpUiPanel`
+- [ ] **`cursor/create_plan` phases** -- forward `phases` from bridge to webview
+- [ ] **`cursor/update_todos` UI** -- dedicated todo panel instead of plan-style trace lines
+- [ ] **`cursor/task` UI** -- richer subagent task display
+- [ ] **`cursor/generate_image` UI** -- render generated images inline, not only path text
+- [ ] **`toolCallId` on extension payloads** -- surface agent `toolCallId` in bridge request IDs
+- [ ] **SDK unstables** -- evaluate `unstable_resumeSession`, `unstable_forkSession`, NES, document sync as needed
+- [ ] **Protocol v2** -- track RFCs and plan migration when SDK and target agents move to v2
+
+---
+
 Comparison of the **ACP UI** implementation in this repository against:
 
 - Cloned **ACP protocol docs and schema** in `docs/acp/` (synced from `agentclientprotocol/agent-client-protocol` @ `main`, 2026-07-04)
