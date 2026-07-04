@@ -17,8 +17,12 @@ import type { AcpUiSessionModelSelection } from "../../../../src/acp/session/ses
 import {
   groupedModelChoices,
   modelConfigOption,
+  modelConfigSummaryLabel,
   modelParameterOptions,
   pickModelOptionForFamily,
+  resolveDerivedModelParamPick,
+  resolveModelSelectOption,
+  isDerivedConfigId,
 } from "../../../../src/acp/session/sessionConfigOptions";
 import type { AcpUiSessionConfigOption } from "../../../../src/acp/session/sessionConfigOptions";
 import type { AcpUiSlashCommand } from "../../../../src/protocol/extensionHostMessages";
@@ -119,9 +123,21 @@ export function ChatComposer({
         sessionConfigOptions !== null
           ? { options: sessionConfigOptions }
           : null,
+        modelSelection,
       ),
-    [sessionConfigOptions],
+    [sessionConfigOptions, modelSelection],
   );
+  const resolvedModelOption = useMemo(
+    () =>
+      resolveModelSelectOption(
+        sessionConfigOptions !== null
+          ? { options: sessionConfigOptions }
+          : null,
+        modelSelection,
+      ),
+    [sessionConfigOptions, modelSelection],
+  );
+  const useLegacyModelPath = configModelOption === undefined;
   const useConfigModelPicker = configModelOption !== undefined;
   const modelSel = modelSelection;
   const modelReady =
@@ -157,6 +173,35 @@ export function ChatComposer({
       )
     : (modelPickerState?.currentGroupLabel ?? "");
 
+  const handleModelParamPick = (
+    configId: string,
+    value: string | boolean,
+  ): void => {
+    if (
+      resolvedModelOption !== undefined &&
+      isDerivedConfigId(configId)
+    ) {
+      const nextModelId = resolveDerivedModelParamPick(
+        resolvedModelOption,
+        configId,
+        value,
+      );
+      if (nextModelId === null) {
+        return;
+      }
+      if (useLegacyModelPath) {
+        onPickSessionModel(nextModelId);
+        return;
+      }
+      onPickSessionConfigOption(
+        resolvedModelOption.configId,
+        nextModelId,
+      );
+      return;
+    }
+    onPickSessionConfigOption(configId, value);
+  };
+
   const inflight =
     activityLabel !== null && activityLabel.length > 0;
   const activityDisplay = inflight ? activityLabel : workspacePathHint;
@@ -175,7 +220,62 @@ export function ChatComposer({
         >
           {activityDisplay}
         </div>
-        <div className="composer-top-bar-right">
+        <span className="composer-top-bar-hint">/ commands · @ files</span>
+      </div>
+      <div className="composer-input-wrap">
+        {autocomplete !== null && !autocompleteDismissed ? (
+          <div
+            className="composer-slash-menu"
+            role="listbox"
+            aria-label={
+              autocomplete.mode === "slash" ? "Slash commands" : "Workspace files"
+            }
+          >
+            {autocomplete.items.map((item, index) => (
+              <button
+                key={item.key}
+                ref={index === activeIndex ? activeItemRef : undefined}
+                type="button"
+                role="option"
+                aria-selected={index === activeIndex}
+                className={
+                  index === activeIndex
+                    ? "composer-slash-item composer-slash-item--active"
+                    : "composer-slash-item"
+                }
+                onClick={() => {
+                  onDraftChange(
+                    draft.replace(
+                      /(?:^|\s)(?:\/[^\s]*|@[^\s]*)$/,
+                      (match) =>
+                        `${match.startsWith(" ") ? " " : ""}${item.insertText.trimEnd()}`,
+                    ),
+                  );
+                }}
+              >
+                <span className="composer-slash-name">{item.primary}</span>
+                {item.secondary !== undefined && item.secondary.length > 0 ? (
+                  <span className="composer-slash-desc">{item.secondary}</span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <textarea
+          ref={composerInputRef}
+          className="composer-input"
+          placeholder="Describe a task for the agent to do..."
+          aria-label="Agent input"
+          title="Enter to send. Shift+Enter for newline. Arrow up and down for prompt history."
+          rows={2}
+          value={draft}
+          disabled={textareaDisabled}
+          onChange={(e) => onDraftChange(e.target.value)}
+          onKeyDown={onKeyDown}
+        />
+      </div>
+      <div className="composer-footer">
+        <div className="composer-footer-model">
           <span className="composer-inline-label">Model</span>
           {modelPickerLocked ? (
             <>
@@ -262,70 +362,14 @@ export function ChatComposer({
               {configParamOptions.length > 0 ? (
                 <ModelConfigPopover
                   options={configParamOptions}
+                  summaryLabel={modelConfigSummaryLabel(configParamOptions)}
                   disabled={modelSelectDisabled}
-                  onPick={onPickSessionConfigOption}
+                  onPick={handleModelParamPick}
                 />
               ) : null}
             </>
           )}
         </div>
-      </div>
-      <div className="composer-input-wrap">
-        {autocomplete !== null && !autocompleteDismissed ? (
-          <div
-            className="composer-slash-menu"
-            role="listbox"
-            aria-label={
-              autocomplete.mode === "slash" ? "Slash commands" : "Workspace files"
-            }
-          >
-            {autocomplete.items.map((item, index) => (
-              <button
-                key={item.key}
-                ref={index === activeIndex ? activeItemRef : undefined}
-                type="button"
-                role="option"
-                aria-selected={index === activeIndex}
-                className={
-                  index === activeIndex
-                    ? "composer-slash-item composer-slash-item--active"
-                    : "composer-slash-item"
-                }
-                onClick={() => {
-                  onDraftChange(
-                    draft.replace(
-                      /(?:^|\s)(?:\/[^\s]*|@[^\s]*)$/,
-                      (match) =>
-                        `${match.startsWith(" ") ? " " : ""}${item.insertText.trimEnd()}`,
-                    ),
-                  );
-                }}
-              >
-                <span className="composer-slash-name">{item.primary}</span>
-                {item.secondary !== undefined && item.secondary.length > 0 ? (
-                  <span className="composer-slash-desc">{item.secondary}</span>
-                ) : null}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <textarea
-          ref={composerInputRef}
-          className="composer-input"
-          placeholder="Describe a task for the agent to do..."
-          aria-label="Agent input"
-          title="Enter to send. Shift+Enter for newline. Arrow up and down for prompt history."
-          rows={2}
-          value={draft}
-          disabled={textareaDisabled}
-          onChange={(e) => onDraftChange(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
-      </div>
-      <div className="composer-footer">
-        <span className="composer-footer-hint-left">
-          / commands · @ files
-        </span>
         <button
           type="button"
           className="composer-cancel"

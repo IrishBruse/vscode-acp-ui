@@ -120,4 +120,15 @@ describe("pickVariantForGroup", () => {
         );
         expect(nextId).toBe("claude-opus-4-6[effort=medium]");
     });
+
+    it("preserves fast mode when switching model families", () => {
+        const nextId = pickVariantForGroup(
+            [
+                { modelId: "gpt-5.4[]", params: {} },
+                { modelId: "gpt-5.4[fast=true]", params: { fast: "true" } },
+            ],
+            { fast: "true" },
+        );
+        expect(nextId).toBe("gpt-5.4[fast=true]");
+    });
 });

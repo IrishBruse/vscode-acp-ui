@@ -25,6 +25,7 @@ export type ModelPickerState = {
 };
 
 const VARIANT_PARAM_LABELS: Record<string, Record<string, string>> = {
+    fast: { true: "Fast", false: "Standard" },
     thinking: { true: "Thinking", false: "Standard" },
     reasoning: {
         low: "Low reasoning",
@@ -254,12 +255,20 @@ export function pickVariantForGroup(
         return variants[0].modelId;
     }
 
-    const tunableKeys = ["thinking", "reasoning", "effort", "context"];
+    const tunableKeys = ["fast", "thinking", "reasoning", "effort", "context"];
     let best = variants[0];
     let bestScore = -1;
     for (const variant of variants) {
         let score = 0;
         for (const key of tunableKeys) {
+            if (key === "fast" || key === "thinking") {
+                const wantOn = preferredParams[key] === "true";
+                const isOn = variant.params[key] === "true";
+                if (wantOn === isOn) {
+                    score += 1;
+                }
+                continue;
+            }
             if (
                 preferredParams[key] !== undefined &&
                 variant.params[key] === preferredParams[key]

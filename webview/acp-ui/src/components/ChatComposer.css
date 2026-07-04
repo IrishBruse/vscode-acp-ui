@@ -60,13 +60,21 @@
     }
 }
 
-.composer-top-bar-right {
+.composer-top-bar-hint {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-family: var(--vscode-editor-font-family), ui-monospace, monospace;
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.8;
+    user-select: none;
+}
+
+.composer-footer-model {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    flex-shrink: 0;
+    flex: 1;
+    min-width: 0;
     gap: 8px;
-    margin-left: auto;
 }
 
 .composer-inline-label {
@@ -266,16 +274,6 @@
     gap: 10px;
     padding: 4px 8px 6px;
     border-top: none;
-}
-
-.composer-footer-hint-left {
-    flex: 1;
-    min-width: 0;
-    font-size: 10px;
-    font-family: var(--vscode-editor-font-family), ui-monospace, monospace;
-    color: var(--vscode-descriptionForeground);
-    opacity: 0.8;
-    user-select: none;
 }
 
 .composer-send {

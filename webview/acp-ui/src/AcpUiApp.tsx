@@ -14,11 +14,6 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  composeModelIdAfterDerivedChange,
-  isDerivedConfigId,
-  modelConfigOption,
-} from "../../../src/acp/session/sessionConfigOptions";
 import type { AcpUiSlashCommand } from "../../../src/protocol/extensionHostMessages";
 import {
   type ChatAction,
@@ -652,35 +647,6 @@ export function AcpUiApp({
               postSetSessionModel(modelId);
             }}
             onPickSessionConfigOption={(configId, value) => {
-              const modelOption = modelConfigOption(
-                state.sessionConfigOptions !== null
-                  ? { options: state.sessionConfigOptions }
-                  : null,
-              );
-              if (
-                modelOption !== undefined &&
-                isDerivedConfigId(configId) &&
-                typeof value === "string"
-              ) {
-                const nextModelId = composeModelIdAfterDerivedChange(
-                  modelOption,
-                  configId,
-                  value,
-                );
-                if (nextModelId !== null) {
-                  dispatch({
-                    type: "pickSessionConfigOption",
-                    configId: modelOption.configId,
-                    value: nextModelId,
-                  });
-                  postSetSessionConfigOption(
-                    modelOption.configId,
-                    nextModelId,
-                  );
-                  return;
-                }
-                return;
-              }
               dispatch({ type: "pickSessionConfigOption", configId, value });
               postSetSessionConfigOption(configId, value);
             }}

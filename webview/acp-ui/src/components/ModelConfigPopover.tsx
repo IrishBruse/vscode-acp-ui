@@ -10,6 +10,7 @@ import "./ModelConfigPopover.css";
 
 export type ModelConfigPopoverProps = {
     options: AcpUiSessionConfigOption[];
+    summaryLabel: string;
     disabled: boolean;
     onPick: (configId: string, value: string | boolean) => void;
 };
@@ -19,6 +20,7 @@ export type ModelConfigPopoverProps = {
  */
 export function ModelConfigPopover({
     options,
+    summaryLabel,
     disabled,
     onPick,
 }: ModelConfigPopoverProps): ReactElement | null {
@@ -53,12 +55,13 @@ export function ModelConfigPopover({
                 className="model-config-popover-trigger"
                 aria-expanded={open}
                 aria-controls={panelId}
+                title={summaryLabel}
                 disabled={disabled}
                 onClick={() => {
                     setOpen((current) => !current);
                 }}
             >
-                Params
+                {summaryLabel}
             </button>
             {open ? (
                 <div
