@@ -106,18 +106,18 @@ describe("composeModelIdAfterDerivedChange", () => {
             name: "Model",
             category: "model",
             type: "select" as const,
-            currentValue: "composer-2[fast=true]",
+            currentValue: "gemini-3.1-pro[]",
             options: [
                 {
-                    value: "composer-2[fast=true]",
-                    name: "composer-2",
+                    value: "gemini-3.1-pro[]",
+                    name: "gemini-3.1-pro",
                 },
             ],
         };
         const next = composeModelIdAfterDerivedChange(
             modelOption,
-            "_derived:fast",
-            "false",
+            "_derived:effort",
+            "high",
         );
         expect(next).toBeNull();
     });
@@ -158,12 +158,15 @@ describe("groupedModelChoices", () => {
                     name: "Model",
                     category: "model",
                     type: "select",
-                    currentValue: "composer-2.5[fast=true]",
+                    currentValue: "claude-opus-4-6[effort=high]",
                     options: [
-                        { value: "composer-2.5[]", name: "composer-2.5" },
                         {
-                            value: "composer-2.5[fast=true]",
-                            name: "composer-2.5",
+                            value: "claude-opus-4-6[effort=high]",
+                            name: "claude-opus-4-6",
+                        },
+                        {
+                            value: "claude-opus-4-6[effort=medium]",
+                            name: "claude-opus-4-6",
                         },
                     ],
                 },
@@ -185,10 +188,16 @@ describe("modelParameterOptions", () => {
                 name: "Model",
                 category: "model",
                 type: "select",
-                currentValue: "composer-2.5[fast=true]",
+                currentValue: "claude-opus-4-6[effort=high]",
                 options: [
-                    { value: "composer-2.5[]", name: "composer-2.5" },
-                    { value: "composer-2.5[fast=true]", name: "composer-2.5" },
+                    {
+                        value: "claude-opus-4-6[effort=high]",
+                        name: "claude-opus-4-6",
+                    },
+                    {
+                        value: "claude-opus-4-6[effort=medium]",
+                        name: "claude-opus-4-6",
+                    },
                 ],
             },
             {
@@ -207,7 +216,7 @@ describe("modelParameterOptions", () => {
         expect(params.some((row) => row.configId === "context_size")).toBe(
             true,
         );
-        expect(params.some((row) => row.configId === "_derived:fast")).toBe(
+        expect(params.some((row) => row.configId === "_derived:effort")).toBe(
             false,
         );
     });

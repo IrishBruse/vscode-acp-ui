@@ -39,14 +39,11 @@ const DERIVED_CONFIG_PREFIX = "_derived:";
 const PARAM_LABELS: Record<string, string> = {
     context: "Context",
     effort: "Effort",
-    fast: "Mode",
     thinking: "Mode",
     reasoning: "Reasoning",
-    max: "Max mode",
 };
 
 const PARAM_VALUE_LABELS: Record<string, Record<string, string>> = {
-    fast: { true: "Fast", false: "Thinking" },
     thinking: { true: "Thinking", false: "Standard" },
     effort: {
         low: "Low",
@@ -204,11 +201,11 @@ export function deriveModelParamOptionsFromModelSelect(
     const keys = new Set<string>();
     for (const params of variantParams) {
         for (const key of Object.keys(params)) {
+            if (key === "fast" || key === "max") {
+                continue;
+            }
             keys.add(key);
         }
-    }
-    if (/^composer(?:[-.]|$)/.test(current.base) && !keys.has("fast")) {
-        keys.add("fast");
     }
 
     const derived: AcpUiSessionConfigOption[] = [];
@@ -219,10 +216,6 @@ export function deriveModelParamOptionsFromModelSelect(
                 values.add(params[key]);
             }
         }
-        if (key === "fast" && values.size === 0) {
-            values.add("false");
-            values.add("true");
-        }
         if (values.size <= 1) {
             continue;
         }
@@ -230,9 +223,6 @@ export function deriveModelParamOptionsFromModelSelect(
             value,
             name: humanizeParamValue(key, value),
         }));
-        if (key === "fast" && !values.has("false")) {
-            options.unshift({ value: "", name: "Default" });
-        }
         const currentValue = current.params[key] ?? "";
         derived.push({
             configId: `${DERIVED_CONFIG_PREFIX}${key}`,
@@ -353,21 +343,10 @@ export function pickModelOptionForFamily(
         const params = parseModelIdBracketParams(choice.value).params;
         let score = 0;
         for (const [key, value] of Object.entries(preferredParams)) {
+            if (key === "fast" || key === "max") {
+                continue;
+            }
             if (params[key] === value) {
-                score += 1;
-            }
-            if (
-                (key === "fast" || key === "max") &&
-                value === "true" &&
-                params[key] === "true"
-            ) {
-                score += 1;
-            }
-            if (
-                (key === "fast" || key === "max") &&
-                value !== "true" &&
-                params[key] === undefined
-            ) {
                 score += 1;
             }
         }

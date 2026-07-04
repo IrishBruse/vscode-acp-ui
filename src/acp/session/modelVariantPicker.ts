@@ -1,4 +1,4 @@
-/** Parsed bracket suffix on Cursor-style model ids, e.g. `composer-2[fast=true]`. */
+/** Parsed bracket suffix on Cursor-style model ids, e.g. `model-1[context=200k]`. */
 export type ParsedModelId = {
     base: string;
     params: Record<string, string>;
@@ -17,21 +17,14 @@ export type ModelPickerGroup = {
     variants: ModelPickerVariant[];
 };
 
-const PRIMARY_BOOLEAN_TOGGLES = ["fast", "max"] as const;
-type PrimaryBooleanToggle = (typeof PRIMARY_BOOLEAN_TOGGLES)[number];
-
 export type ModelPickerState = {
     groups: ModelPickerGroup[];
     currentGroupName: string;
     currentGroupLabel: string;
     currentModelId: string;
-    currentVariants: ModelPickerVariant[];
-    showVariantPicker: boolean;
 };
 
 const VARIANT_PARAM_LABELS: Record<string, Record<string, string>> = {
-    fast: { true: "Fast", false: "Standard" },
-    max: { true: "Max", false: "Standard" },
     thinking: { true: "Thinking", false: "Standard" },
     reasoning: {
         low: "Low reasoning",
@@ -46,7 +39,7 @@ const VARIANT_PARAM_LABELS: Record<string, Record<string, string>> = {
 };
 
 /**
- * Splits `model-1[fast=true,context=200k]` into base name and key/value params.
+ * Splits `model-1[context=200k,effort=high]` into base name and key/value params.
  * Plain ids without brackets return an empty params map.
  */
 export function parseModelIdBracketParams(modelId: string): ParsedModelId {
@@ -96,16 +89,6 @@ export function formatVariantLabel(params: Record<string, string>): string {
         return `${key}=${value}`;
     });
     return parts.join(", ");
-}
-
-function variantSortKey(label: string): string {
-    if (label === "Default") {
-        return "\u0000";
-    }
-    if (label === "Fast") {
-        return "\u0001";
-    }
-    return label.toLowerCase();
 }
 
 const SLUG_ACRONYMS = new Set(["gpt", "ai"]);
@@ -178,147 +161,8 @@ export function buildModelId(
     return `${base}[${inner}]`;
 }
 
-function paramsSignature(params: Record<string, string>): string {
-    const keys = Object.keys(params).sort();
-    if (keys.length === 0) {
-        return "";
-    }
-    return keys.map((key) => `${key}=${params[key]}`).join(",");
-}
-
-function composerFamilyBase(base: string): boolean {
-    return /^composer(?:[-.]|$)/.test(base);
-}
-
-function discoverPrimaryToggle(
-    base: string,
-    agentVariants: ReadonlyArray<{ params: Record<string, string> }>,
-): PrimaryBooleanToggle | null {
-    for (const key of PRIMARY_BOOLEAN_TOGGLES) {
-        if (
-            agentVariants.some((variant) => variant.params[key] !== undefined)
-        ) {
-            return key;
-        }
-    }
-    if (composerFamilyBase(base)) {
-        return "fast";
-    }
-    return null;
-}
-
-function formatToggleVariantLabel(
-    toggleKey: PrimaryBooleanToggle,
-    enabled: boolean,
-): string {
-    if (toggleKey === "fast") {
-        return enabled ? "Fast" : "Default";
-    }
-    return enabled ? "Max" : "Default";
-}
-
 /**
- * Cursor often advertises one `modelId` per family (e.g. only `composer-2.5[fast=true]`).
- * Synthesize the off/on pair so the UI can still toggle fast/max mode.
- */
-function synthesizePrimaryToggleVariants(
-    base: string,
-    agentVariants: ReadonlyArray<{
-        modelId: string;
-        params: Record<string, string>;
-    }>,
-    toggleKey: PrimaryBooleanToggle,
-): Array<{ modelId: string; params: Record<string, string> }> {
-    const template = {
-        ...(agentVariants.find(
-            (variant) => variant.params[toggleKey] !== undefined,
-        )?.params ??
-            agentVariants[0]?.params ??
-            {}),
-    };
-    const offParams = { ...template };
-    delete offParams[toggleKey];
-    const onParams = { ...template, [toggleKey]: "true" };
-
-    const result: Array<{ modelId: string; params: Record<string, string> }> =
-        [];
-    const add = (params: Record<string, string>) => {
-        const signature = paramsSignature(params);
-        const agentMatch = agentVariants.find(
-            (variant) => paramsSignature(variant.params) === signature,
-        );
-        if (agentMatch !== undefined) {
-            if (!result.some((entry) => entry.modelId === agentMatch.modelId)) {
-                result.push({
-                    modelId: agentMatch.modelId,
-                    params: agentMatch.params,
-                });
-            }
-            return;
-        }
-        const modelId = buildModelId(base, params);
-        const agentById = agentVariants.find(
-            (variant) => variant.modelId === modelId,
-        );
-        if (agentById !== undefined) {
-            if (!result.some((entry) => entry.modelId === agentById.modelId)) {
-                result.push({
-                    modelId: agentById.modelId,
-                    params: agentById.params,
-                });
-            }
-        }
-    };
-
-    add(offParams);
-    add(onParams);
-
-    for (const variant of agentVariants) {
-        if (!result.some((entry) => entry.modelId === variant.modelId)) {
-            result.push(variant);
-        }
-    }
-
-    return result;
-}
-
-function toPickerVariants(
-    entries: ReadonlyArray<{ modelId: string; params: Record<string, string> }>,
-    toggleKey: PrimaryBooleanToggle | null,
-): ModelPickerVariant[] {
-    const baseline = { ...(entries[0]?.params ?? {}) };
-    if (toggleKey !== null) {
-        delete baseline[toggleKey];
-    }
-    const baselineSignature = paramsSignature(baseline);
-
-    return entries
-        .map((entry) => {
-            const normalized = { ...entry.params };
-            if (toggleKey !== null) {
-                delete normalized[toggleKey];
-            }
-            const differsOnlyByToggle =
-                toggleKey !== null &&
-                paramsSignature(normalized) === baselineSignature;
-            return {
-                modelId: entry.modelId,
-                label: differsOnlyByToggle
-                    ? formatToggleVariantLabel(
-                          toggleKey,
-                          entry.params[toggleKey] === "true",
-                      )
-                    : formatVariantLabel(entry.params),
-            };
-        })
-        .sort((a, b) =>
-            variantSortKey(a.label).localeCompare(variantSortKey(b.label)),
-        );
-}
-
-/**
- * Groups agent models by parsed id base and surfaces fast/max toggles even when
- * the agent only lists a single variant (common for Cursor composer models).
+ * Groups agent models by parsed id base using only advertised variants.
  */
 export function buildModelPickerState(
     availableModels: ReadonlyArray<{ modelId: string; name: string }>,
@@ -366,20 +210,14 @@ export function buildModelPickerState(
         if (bucket === undefined) {
             continue;
         }
-        const toggleKey = discoverPrimaryToggle(base, bucket.variants);
-        const expanded =
-            toggleKey === null
-                ? bucket.variants
-                : synthesizePrimaryToggleVariants(
-                      base,
-                      bucket.variants,
-                      toggleKey,
-                  );
-        const sampleModelId = expanded[0]?.modelId ?? model.modelId;
+        const sampleModelId = bucket.variants[0]?.modelId ?? model.modelId;
         groups.push({
             name: base,
             label: formatModelDisplayName(bucket.displayName, sampleModelId),
-            variants: toPickerVariants(expanded, toggleKey),
+            variants: bucket.variants.map((variant) => ({
+                modelId: variant.modelId,
+                label: formatVariantLabel(variant.params),
+            })),
         });
     }
 
@@ -389,7 +227,6 @@ export function buildModelPickerState(
     const currentBase = parseModelIdBracketParams(currentEntry.modelId).base;
     const currentGroup =
         groups.find((group) => group.name === currentBase) ?? null;
-    const currentVariants = currentGroup?.variants ?? [];
     const currentGroupLabel =
         currentGroup?.label ??
         formatModelDisplayName(currentEntry.name, currentEntry.modelId);
@@ -399,8 +236,6 @@ export function buildModelPickerState(
         currentGroupName: currentBase,
         currentGroupLabel,
         currentModelId: currentEntry.modelId,
-        currentVariants,
-        showVariantPicker: currentVariants.length > 1,
     };
 }
 
@@ -419,27 +254,12 @@ export function pickVariantForGroup(
         return variants[0].modelId;
     }
 
-    const tunableKeys = [
-        "fast",
-        "max",
-        "thinking",
-        "reasoning",
-        "effort",
-        "context",
-    ];
+    const tunableKeys = ["thinking", "reasoning", "effort", "context"];
     let best = variants[0];
     let bestScore = -1;
     for (const variant of variants) {
         let score = 0;
         for (const key of tunableKeys) {
-            if (key === "fast" || key === "max") {
-                const wantOn = preferredParams[key] === "true";
-                const isOn = variant.params[key] === "true";
-                if (wantOn === isOn) {
-                    score += 1;
-                }
-                continue;
-            }
             if (
                 preferredParams[key] !== undefined &&
                 variant.params[key] === preferredParams[key]

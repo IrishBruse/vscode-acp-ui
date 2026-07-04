@@ -156,10 +156,6 @@ export function ChatComposer({
         configModelOption?.currentValue ?? "",
       )
     : (modelPickerState?.currentGroupLabel ?? "");
-  const currentVariantLabel =
-    modelPickerState?.currentVariants.find(
-      (variant) => variant.modelId === modelPickerState?.currentModelId,
-    )?.label ?? "";
 
   const inflight =
     activityLabel !== null && activityLabel.length > 0;
@@ -190,15 +186,6 @@ export function ChatComposer({
               >
                 {modelLabel.length > 0 ? modelLabel : "\u2014"}
               </span>
-              {modelPickerState?.showVariantPicker === true ? (
-                <span
-                  className="composer-pick-value"
-                  title={currentVariantLabel}
-                  aria-label={`Model variant: ${currentVariantLabel}`}
-                >
-                  {currentVariantLabel}
-                </span>
-              ) : null}
             </>
           ) : (
             <>
@@ -278,25 +265,6 @@ export function ChatComposer({
                   disabled={modelSelectDisabled}
                   onPick={onPickSessionConfigOption}
                 />
-              ) : null}
-              {!useConfigModelPicker &&
-              modelPickerState?.showVariantPicker === true ? (
-                <select
-                  id="acp-ui-model-variant-select"
-                  className="composer-model-select composer-model-variant-select"
-                  aria-label="Model variant"
-                  value={modelPickerState.currentModelId}
-                  disabled={modelSelectDisabled}
-                  onChange={(e) => {
-                    onPickSessionModel(e.target.value);
-                  }}
-                >
-                  {modelPickerState.currentVariants.map((variant) => (
-                    <option key={variant.modelId} value={variant.modelId}>
-                      {variant.label}
-                    </option>
-                  ))}
-                </select>
               ) : null}
             </>
           )}

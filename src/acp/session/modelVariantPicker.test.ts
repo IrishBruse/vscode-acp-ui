@@ -11,10 +11,12 @@ import {
 describe("parseModelIdBracketParams", () => {
     it("parses bracket params", () => {
         expect(
-            parseModelIdBracketParams("composer-2.5[fast=true,reasoning=high]"),
+            parseModelIdBracketParams(
+                "claude-opus-4-6[thinking=true,context=200k]",
+            ),
         ).toEqual({
-            base: "composer-2.5",
-            params: { fast: "true", reasoning: "high" },
+            base: "claude-opus-4-6",
+            params: { thinking: "true", context: "200k" },
         });
     });
 
@@ -28,66 +30,40 @@ describe("parseModelIdBracketParams", () => {
 
 describe("buildModelId", () => {
     it("rebuilds bracket model ids", () => {
-        expect(buildModelId("composer-2.5", { fast: "true" })).toBe(
-            "composer-2.5[fast=true]",
+        expect(buildModelId("gemini-3.1-pro", {})).toBe("gemini-3.1-pro[]");
+        expect(buildModelId("claude-opus-4-6", { effort: "high" })).toBe(
+            "claude-opus-4-6[effort=high]",
         );
-        expect(buildModelId("composer-2.5", {})).toBe("composer-2.5[]");
     });
 });
 
 describe("buildModelPickerState", () => {
-    it("groups variants under one model name", () => {
+    it("groups advertised variants under one model name", () => {
         const state = buildModelPickerState(
             [
                 { modelId: "composer-2.5[]", name: "composer-2.5" },
-                { modelId: "composer-2.5[fast=true]", name: "composer-2.5" },
                 {
-                    modelId: "composer-2.5[max=true]",
+                    modelId: "composer-2.5[reasoning=high]",
                     name: "composer-2.5",
                 },
                 { modelId: "gpt-5.4[]", name: "gpt-5.4" },
             ],
-            "composer-2.5[fast=true]",
+            "composer-2.5[reasoning=high]",
         );
-        expect(state?.showVariantPicker).toBe(true);
-        expect(state?.currentVariants.map((v) => v.label)).toEqual([
-            "Default",
-            "Fast",
-            "Max",
-        ]);
         expect(state?.groups.map((g) => g.name)).toEqual([
             "composer-2.5",
             "gpt-5.4",
         ]);
-        expect(state?.groups.map((g) => g.label)).toEqual([
-            "Composer 2.5",
-            "GPT 5.4",
-        ]);
+        expect(state?.groups[0]?.variants).toHaveLength(2);
         expect(state?.currentGroupLabel).toBe("Composer 2.5");
     });
 
-    it("hides the variant picker for a single variant", () => {
+    it("uses a single variant when the agent lists one", () => {
         const state = buildModelPickerState(
             [{ modelId: "gemini-3.1-pro[]", name: "gemini-3.1-pro" }],
             "gemini-3.1-pro[]",
         );
-        expect(state?.showVariantPicker).toBe(false);
-    });
-
-    it("does not synthesize a default fast toggle when the agent omits it", () => {
-        const state = buildModelPickerState(
-            [
-                {
-                    modelId: "composer-2.5[fast=true]",
-                    name: "Composer 2.5",
-                },
-            ],
-            "composer-2.5[fast=true]",
-        );
-        expect(state?.showVariantPicker).toBe(false);
-        expect(state?.currentVariants.map((v) => v.modelId)).toEqual([
-            "composer-2.5[fast=true]",
-        ]);
+        expect(state?.groups[0]?.variants).toHaveLength(1);
     });
 });
 
@@ -120,22 +96,28 @@ describe("formatModelDisplayName", () => {
 
 describe("formatVariantLabel", () => {
     it("maps known params to friendly labels", () => {
-        expect(formatVariantLabel({ fast: "true" })).toBe("Fast");
         expect(formatVariantLabel({ reasoning: "medium" })).toBe(
             "Medium reasoning",
         );
+        expect(formatVariantLabel({})).toBe("Default");
     });
 });
 
 describe("pickVariantForGroup", () => {
-    it("preserves fast mode when switching model families", () => {
+    it("preserves effort when switching model families", () => {
         const nextId = pickVariantForGroup(
             [
-                { modelId: "gpt-5.4[]", params: {} },
-                { modelId: "gpt-5.4[fast=true]", params: { fast: "true" } },
+                {
+                    modelId: "claude-opus-4-6[effort=high]",
+                    params: { effort: "high" },
+                },
+                {
+                    modelId: "claude-opus-4-6[effort=medium]",
+                    params: { effort: "medium" },
+                },
             ],
-            { fast: "true" },
+            { effort: "medium" },
         );
-        expect(nextId).toBe("gpt-5.4[fast=true]");
+        expect(nextId).toBe("claude-opus-4-6[effort=medium]");
     });
 });
