@@ -21,6 +21,8 @@ Minimum viable integration ("in some way"):
 
 Binary download can land in a follow-up commit within this task, but npx/uvx resolution is required for v1.
 
+https://github.com/agentclientprotocol/registry/releases/download/v2026.07.04-386a2ae/registry.json
+
 ## Why
 
 Agents are configured only via hand-written settings today:
