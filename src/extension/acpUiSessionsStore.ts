@@ -1,5 +1,13 @@
-import { randomUUID } from "node:crypto";
-import type { ExtensionContext } from "vscode";
+import type { ExtensionContext, Uri } from "vscode";
+import { parseStoredChatItems } from "./acpUiLegacySessions";
+import { getAcpUiPromptHistoryEntries } from "./acpUiPromptHistoryMemento";
+import {
+    createSessionFile,
+    deleteSessionFile,
+    listSessionHeaders,
+    setAcpUiSessionJsonlLogger,
+    updateSessionHeader,
+} from "./acpUiSessionJsonl";
 
 /**
  * One saved ACP UI session listed in the Chats tree.
@@ -9,71 +17,69 @@ export type AcpUiSessionRecord = {
     title: string;
     updatedAt: number;
     agentName?: string;
+    /** ACP runtime session id after connect. */
     sessionId?: string;
+    uri: Uri;
 };
 
-export type StoredChatItem = {
-    id: string;
-    title: string;
-    agentName: string;
-    sessionId: string;
-    updatedAt: number;
-};
+export type { StoredChatItem } from "./acpUiLegacySessions";
+export { parseStoredChatItems } from "./acpUiLegacySessions";
 
 const chatsStorageKey = "acpUi.chats.v2";
 const legacyGlobalChatsStorageKey = "acpUi.chats.v1";
+const migrationDoneKey = "acpUi.chats.jsonlMigration.v1";
+
 const sessions: AcpUiSessionRecord[] = [];
 let activeId: string | null = null;
 let extensionContext: ExtensionContext | null = null;
 let logWarn: ((message: string) => void) | null = null;
 
-function persistSessions(): void {
+function indexFromHeader(
+    header: {
+        id: string;
+        title: string;
+        updatedAt: number;
+        agentName?: string;
+        runtimeSessionId?: string;
+    },
+    uri: Uri,
+): AcpUiSessionRecord {
+    return {
+        id: header.id,
+        title: header.title,
+        updatedAt: header.updatedAt,
+        ...(header.agentName !== undefined
+            ? { agentName: header.agentName }
+            : {}),
+        ...(header.runtimeSessionId !== undefined
+            ? { sessionId: header.runtimeSessionId }
+            : {}),
+        uri,
+    };
+}
+
+async function reloadSessionsFromDisk(): Promise<void> {
     if (extensionContext === null) {
         return;
     }
-    const payload: StoredChatItem[] = sessions
-        .filter(
-            (
-                row,
-            ): row is AcpUiSessionRecord & {
-                agentName: string;
-                sessionId: string;
-            } =>
-                typeof row.agentName === "string" &&
-                row.agentName.length > 0 &&
-                typeof row.sessionId === "string" &&
-                row.sessionId.length > 0,
-        )
-        .map((row) => ({
-            id: row.id,
-            title: row.title,
-            agentName: row.agentName,
-            sessionId: row.sessionId,
-            updatedAt: row.updatedAt,
-        }));
-    void extensionContext.workspaceState.update(chatsStorageKey, payload);
+    const rows = await listSessionHeaders(extensionContext);
+    sessions.length = 0;
+    sessions.push(
+        ...rows.map(({ header, uri }) => indexFromHeader(header, uri)),
+    );
+    if (activeId !== null && !sessions.some((s) => s.id === activeId)) {
+        activeId = sessions[0]?.id ?? null;
+    }
 }
 
-function markUpdated(sessionId: string): void {
-    const row = sessions.find((s) => s.id === sessionId);
-    if (row === undefined) {
+async function migrateLegacyStorageIfNeeded(): Promise<void> {
+    if (extensionContext === null) {
         return;
     }
-    row.updatedAt = Date.now();
-    persistSessions();
-}
-
-/**
- * Initializes in-memory chats from extension workspace state.
- */
-export function initializeAcpUiSessionsStore(
-    context: ExtensionContext,
-    options?: { log?: (message: string) => void },
-): void {
-    extensionContext = context;
-    logWarn = options?.log ?? null;
-    sessions.length = 0;
-    activeId = null;
+    const context = extensionContext;
+    if (context.globalState.get<boolean>(migrationDoneKey) === true) {
+        return;
+    }
     const raw = context.workspaceState.get<unknown>(chatsStorageKey);
     const legacyGlobalRaw = context.globalState.get<unknown>(
         legacyGlobalChatsStorageKey,
@@ -82,62 +88,55 @@ export function initializeAcpUiSessionsStore(
         raw === undefined && Array.isArray(legacyGlobalRaw)
             ? legacyGlobalRaw
             : raw;
-    const restoredWithMigration = parseStoredChatItems(migrated);
-    if (restoredWithMigration === null) {
-        logWarn?.(
-            "Ignored malformed persisted chat storage at acpUi.chats.v2; starting with an empty chats list.",
-        );
-        void context.workspaceState.update(chatsStorageKey, []);
+    const restored = parseStoredChatItems(migrated);
+    if (restored === null) {
+        await context.globalState.update(migrationDoneKey, true);
+        void context.workspaceState.update(chatsStorageKey, undefined);
+        void context.globalState.update(legacyGlobalChatsStorageKey, undefined);
         return;
     }
-    sessions.push(
-        ...restoredWithMigration.map((row) => ({
-            id: row.id,
-            title: row.title,
-            updatedAt: row.updatedAt,
-            agentName: row.agentName,
-            sessionId: row.sessionId,
-        })),
-    );
-    activeId = sessions[0]?.id ?? null;
-    if (raw === undefined && Array.isArray(legacyGlobalRaw)) {
-        persistSessions();
+    for (const row of restored) {
+        const promptHistory = getAcpUiPromptHistoryEntries(context, row.id);
+        try {
+            await createSessionFile(context, row.title, {
+                id: row.id,
+                agentName: row.agentName,
+                runtimeSessionId: row.sessionId,
+                promptHistory:
+                    promptHistory.length > 0 ? promptHistory : undefined,
+                createdAt: row.updatedAt,
+            });
+        } catch {
+            logWarn?.(`Failed to migrate legacy chat "${row.title}" to JSONL.`);
+        }
     }
+    await context.globalState.update(migrationDoneKey, true);
+    void context.workspaceState.update(chatsStorageKey, undefined);
+    void context.globalState.update(legacyGlobalChatsStorageKey, undefined);
 }
 
-export function parseStoredChatItems(raw: unknown): StoredChatItem[] | null {
-    if (!Array.isArray(raw)) {
-        return raw === undefined ? [] : null;
-    }
-    const out: StoredChatItem[] = [];
-    for (const item of raw) {
-        if (item === null || typeof item !== "object") {
-            return null;
-        }
-        const row = item as Record<string, unknown>;
-        if (
-            typeof row.id !== "string" ||
-            row.id.length === 0 ||
-            typeof row.title !== "string" ||
-            row.title.trim().length === 0 ||
-            typeof row.agentName !== "string" ||
-            row.agentName.length === 0 ||
-            typeof row.sessionId !== "string" ||
-            row.sessionId.length === 0 ||
-            typeof row.updatedAt !== "number" ||
-            !Number.isFinite(row.updatedAt)
-        ) {
-            return null;
-        }
-        out.push({
-            id: row.id,
-            title: row.title.trim(),
-            agentName: row.agentName,
-            sessionId: row.sessionId,
-            updatedAt: row.updatedAt,
-        });
-    }
-    return out;
+/**
+ * Initializes in-memory chats from JSONL session files on disk.
+ */
+export async function initializeAcpUiSessionsStore(
+    context: ExtensionContext,
+    options?: { log?: (message: string) => void },
+): Promise<void> {
+    extensionContext = context;
+    logWarn = options?.log ?? null;
+    setAcpUiSessionJsonlLogger(options?.log);
+    sessions.length = 0;
+    activeId = null;
+    await migrateLegacyStorageIfNeeded();
+    await reloadSessionsFromDisk();
+    activeId = sessions[0]?.id ?? null;
+}
+
+/**
+ * Rescans session files from disk (for example after external changes).
+ */
+export async function refreshAcpUiSessionsFromDisk(): Promise<void> {
+    await reloadSessionsFromDisk();
 }
 
 /**
@@ -145,6 +144,10 @@ export function parseStoredChatItems(raw: unknown): StoredChatItem[] | null {
  */
 export function listAcpUiSessions(): AcpUiSessionRecord[] {
     return [...sessions];
+}
+
+export function getAcpUiSession(id: string): AcpUiSessionRecord | undefined {
+    return sessions.find((s) => s.id === id);
 }
 
 /**
@@ -162,28 +165,31 @@ export function setActiveAcpUiSessionId(id: string | null): void {
 }
 
 /**
- * Appends a new session and returns it.
+ * Appends a new session file and returns its record.
  */
-export function addAcpUiSession(
+export async function addAcpUiSession(
     title: string,
     options?: { agentName?: string },
-): AcpUiSessionRecord {
-    const now = Date.now();
-    const record: AcpUiSessionRecord = {
-        id: randomUUID(),
-        title,
-        updatedAt: now,
+): Promise<AcpUiSessionRecord> {
+    if (extensionContext === null) {
+        throw new Error("ACP UI sessions store is not initialized.");
+    }
+    const created = await createSessionFile(extensionContext, title, {
         agentName: options?.agentName,
-    };
+    });
+    const record = indexFromHeader(created.header, created.uri);
     sessions.push(record);
-    persistSessions();
     return record;
 }
 
 /**
- * Removes a session by id and clears active selection when it pointed at that id.
+ * Removes a session by id and deletes its JSONL file.
  */
-export function removeAcpUiSession(id: string): void {
+export async function removeAcpUiSession(id: string): Promise<void> {
+    const row = sessions.find((s) => s.id === id);
+    if (row !== undefined) {
+        await deleteSessionFile(row.uri);
+    }
     const index = sessions.findIndex((s) => s.id === id);
     if (index >= 0) {
         sessions.splice(index, 1);
@@ -191,48 +197,62 @@ export function removeAcpUiSession(id: string): void {
     if (activeId === id) {
         activeId = sessions[0]?.id ?? null;
     }
-    persistSessions();
 }
 
 /**
- * Updates the stored ACP agent name for a session (for example when the user picks another agent in the editor).
+ * Updates the stored ACP agent name for a session.
  */
-export function setAcpUiSessionAgentName(id: string, agentName: string): void {
+export async function setAcpUiSessionAgentName(
+    id: string,
+    agentName: string,
+): Promise<void> {
     const row = sessions.find((s) => s.id === id);
-    if (row !== undefined) {
-        row.agentName = agentName;
-        row.updatedAt = Date.now();
-        persistSessions();
+    if (row === undefined) {
+        return;
     }
+    row.agentName = agentName;
+    row.updatedAt = Date.now();
+    await updateSessionHeader(row.uri, { agentName, updatedAt: row.updatedAt });
 }
 
 /**
- * Stores ACP runtime session id for later restore attempts.
+ * Stores ACP runtime session id in the session file header.
  */
-export function setAcpUiSessionRuntimeSessionId(
+export async function setAcpUiSessionRuntimeSessionId(
     id: string,
     sessionId: string,
-): void {
+): Promise<void> {
     const row = sessions.find((s) => s.id === id);
-    if (row !== undefined) {
-        row.sessionId = sessionId;
-        row.updatedAt = Date.now();
-        persistSessions();
+    if (row === undefined) {
+        return;
     }
+    row.sessionId = sessionId;
+    row.updatedAt = Date.now();
+    await updateSessionHeader(row.uri, {
+        runtimeSessionId: sessionId,
+        updatedAt: row.updatedAt,
+    });
 }
 
 /**
  * Marks a session as recently used.
  */
 export function touchAcpUiSession(id: string): void {
-    markUpdated(id);
+    const row = sessions.find((s) => s.id === id);
+    if (row === undefined) {
+        return;
+    }
+    row.updatedAt = Date.now();
 }
 
 /**
- * Renames a session title.
+ * Renames a session title in memory and the JSONL header.
  * Returns true when the session exists and a non-empty title was applied.
  */
-export function renameAcpUiSession(id: string, nextTitle: string): boolean {
+export async function renameAcpUiSession(
+    id: string,
+    nextTitle: string,
+): Promise<boolean> {
     const row = sessions.find((s) => s.id === id);
     const title = nextTitle.trim();
     if (row === undefined || title.length === 0) {
@@ -240,6 +260,6 @@ export function renameAcpUiSession(id: string, nextTitle: string): boolean {
     }
     row.title = title;
     row.updatedAt = Date.now();
-    persistSessions();
+    await updateSessionHeader(row.uri, { title, updatedAt: row.updatedAt });
     return true;
 }

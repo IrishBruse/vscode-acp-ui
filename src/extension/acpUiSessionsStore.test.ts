@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseStoredChatItems } from "./acpUiSessionsStore";
+import { parseStoredChatItems } from "./acpUiLegacySessions";
 
 describe("parseStoredChatItems", () => {
     it("accepts well-formed stored records", () => {
