@@ -105,6 +105,7 @@ export type AcpAgentProcessOptions = {
 export class AcpAgentProcess {
     private child: ChildProcess | null = null;
     private connection: acp.ClientSideConnection | null = null;
+    private initResponse: acp.InitializeResponse | null = null;
     private sessionUpdateHandler: SessionUpdateHandler | null = null;
 
     constructor(private readonly options: AcpAgentProcessOptions) {}
@@ -136,12 +137,6 @@ export class AcpAgentProcess {
             const text = chunk.toString();
             console.error(
                 `[ACP Agent ${this.options.config.name}] stderr: ${text}`,
-            );
-        });
-
-        this.child.on("spawn", () => {
-            console.info(
-                `[ACP Agent ${this.options.config.name}] spawned pid=${this.child?.pid ?? "unknown"}`,
             );
         });
 
@@ -205,7 +200,26 @@ export class AcpAgentProcess {
             },
         });
 
+        this.initResponse = response;
         return response;
+    }
+
+    async authenticate(methodId: string): Promise<void> {
+        if (!this.connection) {
+            throw new Error("Agent not started");
+        }
+        await this.connection.authenticate({ methodId });
+    }
+
+    supportsLogout(): boolean {
+        return this.initResponse?.agentCapabilities?.auth?.logout != null;
+    }
+
+    async logout(): Promise<void> {
+        if (!this.connection || !this.supportsLogout()) {
+            return;
+        }
+        await this.connection.unstable_logout({});
     }
 
     async newSession(): Promise<acp.NewSessionResponse> {
@@ -246,6 +260,7 @@ export class AcpAgentProcess {
             this.child = null;
         }
         this.connection = null;
+        this.initResponse = null;
     }
 
     private async handleReadTextFile(

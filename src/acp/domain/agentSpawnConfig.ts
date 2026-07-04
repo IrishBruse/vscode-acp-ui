@@ -7,7 +7,51 @@ export type AcpAgentSpawnConfig = {
     command: string;
     args: string[];
     env?: Record<string, string>;
+    /** Overrides auto-selection when the agent advertises multiple auth methods. */
+    authMethodId?: string;
 };
+
+/** Auth method shape used for resolving which `authenticate` methodId to call. */
+export type AcpAuthMethodRef = {
+    id: string;
+    type?: string;
+};
+
+function isAgentAuthMethod(method: AcpAuthMethodRef): boolean {
+    return method.type === undefined || method.type === "agent";
+}
+
+/**
+ * Picks the `methodId` for `authenticate` from advertised auth methods.
+ * Returns undefined when no methods are advertised (skip authenticate).
+ */
+export function resolveAuthMethodId(
+    methods: AcpAuthMethodRef[] | undefined,
+    configuredId?: string,
+): string | undefined {
+    if (methods === undefined || methods.length === 0) {
+        return undefined;
+    }
+    if (configuredId !== undefined && configuredId.length > 0) {
+        const match = methods.find(
+            (m) => m.id === configuredId && isAgentAuthMethod(m),
+        );
+        if (match === undefined) {
+            const advertised = methods.map((m) => m.id).join(", ");
+            throw new Error(
+                `Configured authMethodId "${configuredId}" does not match an agent-type auth method. Advertised: ${advertised}`,
+            );
+        }
+        return match.id;
+    }
+    const agentMethod = methods.find((m) => isAgentAuthMethod(m));
+    if (agentMethod !== undefined) {
+        return agentMethod.id;
+    }
+    throw new Error(
+        "Agent requires env_var/terminal auth; ACP UI supports agent auth only.",
+    );
+}
 
 /**
  * Parses `acp-agent.json`: a non-empty array of agent objects, or a single agent object
@@ -59,5 +103,16 @@ export function parseAcpAgentSpawnConfig(
             }
         }
     }
-    return { name: record.name, command: record.command, args, env };
+    const authMethodId =
+        typeof record.authMethodId === "string" &&
+        record.authMethodId.trim().length > 0
+            ? record.authMethodId.trim()
+            : undefined;
+    return {
+        name: record.name,
+        command: record.command,
+        args,
+        ...(env !== undefined ? { env } : {}),
+        ...(authMethodId !== undefined ? { authMethodId } : {}),
+    };
 }

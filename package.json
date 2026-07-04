@@ -74,6 +74,10 @@
                                     "type": "string"
                                 },
                                 "description": "Extra environment variables for the agent process."
+                            },
+                            "authMethodId": {
+                                "type": "string",
+                                "description": "ACP authenticate methodId to use when the agent advertises multiple auth methods."
                             }
                         }
                     },
@@ -116,6 +120,9 @@
         "configurationDefaults": {
             "files.associations": {
                 "*.acp": "jsonl"
+            },
+            "files.readonlyInclude": {
+                "**/*.acp": true
             }
         },
         "viewsContainers": {

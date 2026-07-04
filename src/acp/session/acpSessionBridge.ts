@@ -1,9 +1,11 @@
 import type * as acp from "@agentclientprotocol/sdk";
+import { RequestError } from "@agentclientprotocol/sdk";
 import type {
     ExtensionToWebviewMessage,
     WebviewToExtensionMessage,
 } from "../../protocol/extensionHostMessages";
 import type { AcpAgentSpawnConfig } from "../domain/agentSpawnConfig";
+import { resolveAuthMethodId } from "../domain/agentSpawnConfig";
 import { AcpAgentProcess } from "../infrastructure/acpAgentProcess";
 import {
     createToolCallKindTracking,
@@ -56,7 +58,7 @@ export class AcpSessionBridge {
     >();
 
     constructor(
-        config: AcpAgentSpawnConfig,
+        private readonly config: AcpAgentSpawnConfig,
         private readonly postToWebview: PostToWebview,
         host: AcpSessionHostRuntime,
     ) {
@@ -451,8 +453,9 @@ export class AcpSessionBridge {
      * session advertises models, applies it before the first `sessionModels` message to the UI.
      */
     async connect(preferredModelId?: string): Promise<void> {
-        await this.agentProcess.start();
-        const result = await this.agentProcess.newSession();
+        const init = await this.agentProcess.start();
+        await this.ensureAuthenticated(init);
+        const result = await this.newSessionWithAuthRetry(init);
         this.acpSessionId = result.sessionId;
         if (result.models) {
             let state = result.models;
@@ -542,8 +545,57 @@ export class AcpSessionBridge {
     dispose(): void {
         this.cancelPendingPermissions();
         this.cancelPendingExtensionRequests();
+        void this.logoutBestEffort();
         this.agentProcess.dispose();
         this.acpSessionId = null;
+    }
+
+    private async ensureAuthenticated(
+        init: acp.InitializeResponse,
+    ): Promise<void> {
+        const methodId = resolveAuthMethodId(
+            init.authMethods,
+            this.config.authMethodId,
+        );
+        if (methodId === undefined) {
+            return;
+        }
+        try {
+            await this.agentProcess.authenticate(methodId);
+        } catch (err: unknown) {
+            const detail = err instanceof Error ? err.message : String(err);
+            throw new Error(
+                `Authentication failed for agent "${this.config.name}" (methodId="${methodId}"): ${detail}. Try running agent login or set ib-acp-ui.agents authMethodId.`,
+            );
+        }
+    }
+
+    private async newSessionWithAuthRetry(
+        init: acp.InitializeResponse,
+    ): Promise<acp.NewSessionResponse> {
+        try {
+            return await this.agentProcess.newSession();
+        } catch (err: unknown) {
+            if (!isAuthRequiredError(err)) {
+                throw err;
+            }
+            await this.ensureAuthenticated(init);
+            return await this.agentProcess.newSession();
+        }
+    }
+
+    private async logoutBestEffort(): Promise<void> {
+        if (!this.agentProcess.supportsLogout()) {
+            return;
+        }
+        try {
+            await this.agentProcess.logout();
+        } catch (err: unknown) {
+            const detail = err instanceof Error ? err.message : String(err);
+            console.warn(
+                `[ACP Agent ${this.config.name}] logout failed: ${detail}`,
+            );
+        }
     }
 
     private handleSessionUpdate(params: acp.SessionNotification): void {
@@ -555,4 +607,8 @@ export class AcpSessionBridge {
             this.postToWebview(msg);
         }
     }
+}
+
+function isAuthRequiredError(err: unknown): boolean {
+    return err instanceof RequestError && err.code === -32000;
 }

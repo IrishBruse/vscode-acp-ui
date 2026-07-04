@@ -2,7 +2,7 @@
 
 ## Full coverage checklist
 
-- [ ] **Authentication** -- call `authenticate` / `logout` when `initialize` returns `authMethods`
+- [x] **Authentication** -- call `authenticate` / `logout` when `initialize` returns `authMethods`
 - [ ] **Session resume** -- call `session/load` on chat open when agent advertises `loadSession` and a runtime `sessionId` exists
 - [ ] **Session list** -- call `session/list` when agent advertises the capability
 - [ ] **Session delete** -- call `session/delete` when user deletes a local chat and agent advertises the capability

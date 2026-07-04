@@ -12,6 +12,7 @@ export type { AcpAgentSpawnConfig } from "./domain/agentSpawnConfig";
 export {
     parseAcpAgentSpawnConfig,
     parseAcpAgentsJsonFileContent,
+    resolveAuthMethodId,
 } from "./domain/agentSpawnConfig";
 export type {
     AcpAgentProcessOptions,
