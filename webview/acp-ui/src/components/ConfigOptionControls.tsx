@@ -8,12 +8,42 @@ export type ConfigOptionControlsProps = {
     onPick: (configId: string, value: string | boolean) => void;
 };
 
+export type ComposerConfigLoadingProps = {
+    label?: string;
+};
+
 function booleanSelectValue(currentValue: boolean): string {
     return currentValue ? "true" : "false";
 }
 
 function configFieldId(configId: string): string {
     return `acp-ui-config-${configId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+/**
+ * Placeholder while session model/config options are still loading from the agent.
+ */
+export function ComposerConfigLoading({
+    label = "Model",
+}: ComposerConfigLoadingProps): ReactElement {
+    const fieldId = "acp-ui-config-loading";
+    return (
+        <div className="composer-config-field">
+            <label className="composer-config-label" htmlFor={fieldId}>
+                {label}
+            </label>
+            <select
+                id={fieldId}
+                className="composer-config-select composer-config-select--model"
+                aria-label={`${label}: Loading`}
+                aria-busy="true"
+                value="loading"
+                disabled
+            >
+                <option value="loading">Loading...</option>
+            </select>
+        </div>
+    );
 }
 
 /**

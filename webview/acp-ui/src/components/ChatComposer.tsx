@@ -30,7 +30,7 @@ import type { AcpUiSessionConfigOption } from "../../../../src/acp/session/sessi
 import { isSessionModeConfigOption } from "../../../../src/acp/session/sessionModeIndicator";
 import type { AcpUiSlashCommand } from "../../../../src/protocol/extensionHostMessages";
 import { buildComposerAutocompleteState, wrapIndex } from "./composerAutocomplete";
-import { ConfigOptionControls } from "./ConfigOptionControls";
+import { ConfigOptionControls, ComposerConfigLoading } from "./ConfigOptionControls";
 import { SessionModeIndicator } from "./SessionModeIndicator";
 
 export type ChatComposerProps = {
@@ -149,6 +149,12 @@ export function ChatComposer({
   const useConfigModelPicker =
     configModelOption !== undefined && !agentOrderedLayout;
   const modelSel = modelSelection;
+  const showConfigLoading =
+    !modelPickerLocked &&
+    ((sessionConfigOptions === null &&
+      (modelSel === null || modelSel.availableModels.length === 0)) ||
+      (agentOrderedLayout &&
+        (toolbarConfigOptions === null || toolbarConfigOptions.length === 0)));
   const modelReady =
     agentOrderedLayout ||
     useConfigModelPicker ||
@@ -294,7 +300,7 @@ export function ChatComposer({
               : "composer-footer-model"
           }
         >
-          {!agentOrderedLayout ? (
+          {!agentOrderedLayout && !showConfigLoading ? (
             <span className="composer-inline-label">Model</span>
           ) : null}
           {modelPickerLocked ? (
@@ -309,6 +315,8 @@ export function ChatComposer({
             >
               {modelLabel.length > 0 ? modelLabel : "\u2014"}
             </span>
+          ) : showConfigLoading ? (
+            <ComposerConfigLoading />
           ) : agentOrderedLayout && toolbarConfigOptions !== null ? (
             <ConfigOptionControls
               options={toolbarConfigOptions}
@@ -375,17 +383,11 @@ export function ChatComposer({
                     );
                   }}
                 >
-                  {modelPickerState !== null ? (
-                    modelPickerState.groups.map((group) => (
-                      <option key={group.name} value={group.name}>
-                        {group.label}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="" disabled>
-                      {"\u2014"}
+                  {modelPickerState?.groups.map((group) => (
+                    <option key={group.name} value={group.name}>
+                      {group.label}
                     </option>
-                  )}
+                  )) ?? null}
                 </select>
               )}
               {configParamOptions.length > 0 ? (

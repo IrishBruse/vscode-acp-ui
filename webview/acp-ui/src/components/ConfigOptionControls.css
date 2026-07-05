@@ -10,7 +10,6 @@
     font-size: 9px;
     line-height: 1;
     color: var(--vscode-descriptionForeground);
-    text-transform: lowercase;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
