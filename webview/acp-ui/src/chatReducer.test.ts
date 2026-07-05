@@ -6,6 +6,10 @@ import {
     joinThoughtChunks,
     replayChatState,
 } from "./chatReducer";
+import {
+    writeCachedModelParamOptions,
+    writeCachedSessionConfigOptions,
+} from "../../../src/acp/session/sessionConfigOptionsCache";
 
 describe("chatReducer", () => {
     it("merges appendAgentThought chunks into one thought row", () => {
@@ -118,5 +122,138 @@ describe("chatReducer", () => {
             { type: "agent", text: "hi there" },
         ]);
         expect(state.promptInFlight).toBe(false);
+    });
+
+    it("clears model config on loading and restores on sessionConfigOptions", () => {
+        const withOptions = chatReducer(
+            {
+                ...createInitialChatState(),
+                sessionConfigOptions: [
+                    {
+                        configId: "model",
+                        name: "Model",
+                        category: "model",
+                        type: "select",
+                        currentValue: "claude-opus-4-8",
+                        options: [
+                            { value: "claude-opus-4-8", name: "Opus 4.8" },
+                        ],
+                    },
+                ],
+                sessionConfigLoading: false,
+            },
+            { type: "sessionConfigOptionsLoading" },
+        );
+        expect(withOptions.sessionConfigOptions).toBeNull();
+        expect(withOptions.sessionConfigLoading).toBe(true);
+
+        const restored = chatReducer(withOptions, {
+            type: "sessionConfigOptions",
+            options: [
+                {
+                    configId: "model",
+                    name: "Model",
+                    category: "model",
+                    type: "select",
+                    currentValue: "claude-sonnet-4-6",
+                    options: [
+                        { value: "claude-sonnet-4-6", name: "Sonnet 4.6" },
+                    ],
+                },
+            ],
+        });
+        expect(restored.sessionConfigLoading).toBe(false);
+        expect(restored.sessionConfigOptions?.[0]?.currentValue).toBe(
+            "claude-sonnet-4-6",
+        );
+    });
+
+    it("restores cached param options immediately after a model pick", () => {
+        writeCachedModelParamOptions("cursor", "GPT 5.4", [
+            {
+                configId: "_derived:context",
+                name: "Context",
+                type: "select",
+                currentValue: "272k",
+                options: [{ value: "272k", name: "272K" }],
+            },
+            {
+                configId: "_derived:reasoning",
+                name: "Reasoning",
+                type: "select",
+                currentValue: "medium",
+                options: [{ value: "medium", name: "Medium" }],
+            },
+        ]);
+        const base = {
+            ...createInitialChatState(),
+            sessionConfigLoading: false,
+            acpAgentSelection: {
+                currentName: "cursor",
+                availableNames: ["cursor"],
+            },
+            sessionConfigOptions: [
+                {
+                    configId: "model",
+                    name: "Model",
+                    category: "model",
+                    type: "select" as const,
+                    currentValue: "claude-opus-4-8",
+                    options: [
+                        { value: "claude-opus-4-8", name: "Opus 4.8" },
+                        { value: "gpt-5.4", name: "GPT 5.4" },
+                    ],
+                },
+                {
+                    configId: "_derived:effort",
+                    name: "Effort",
+                    type: "select" as const,
+                    currentValue: "high",
+                    options: [{ value: "high", name: "High" }],
+                },
+            ],
+        };
+        const afterModelPick = chatReducer(base, {
+            type: "pickSessionConfigOption",
+            configId: "model",
+            value: "gpt-5.4",
+        });
+        expect(afterModelPick.sessionConfigOptions?.map((row) => row.name)).toEqual(
+            ["Model", "Context", "Reasoning"],
+        );
+    });
+
+    it("seeds composer state from init cache without loading", () => {
+        writeCachedSessionConfigOptions("cursor", [
+            {
+                configId: "model",
+                name: "Model",
+                category: "model",
+                type: "select",
+                currentValue: "claude-opus-4-8",
+                options: [{ value: "claude-opus-4-8", name: "Opus 4.8" }],
+            },
+        ]);
+        const state = createChatStateFromInit({
+            type: "init",
+            sessionId: "s1",
+            title: "Chat",
+            acpAgentName: "cursor",
+            availableAcpAgents: ["cursor"],
+            sessionConfigOptionsSeed: [
+                {
+                    configId: "model",
+                    name: "Model",
+                    category: "model",
+                    type: "select",
+                    currentValue: "claude-opus-4-8",
+                    options: [{ value: "claude-opus-4-8", name: "Opus 4.8" }],
+                },
+            ],
+        });
+        expect(state.sessionConfigLoading).toBe(false);
+        expect(state.sessionConfigOptions?.[0]?.currentValue).toBe(
+            "claude-opus-4-8",
+        );
     });
 });

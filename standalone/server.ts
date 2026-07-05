@@ -22,6 +22,7 @@ import {
 import { NullAcpRpcNdjsonSink } from "../src/acp/ports/rpcNdjsonSink";
 import { AcpSessionBridge } from "../src/acp/session/acpSessionBridge";
 import { parseSessionModelsFromReadmeNdjson } from "../src/acp/session/readmeSessionModels";
+import { readCachedComposerSeed } from "../src/acp/session/sessionConfigOptionsCache";
 import type { AcpUiSessionModelSelection } from "../src/acp/session/sessionModels";
 import { FileAcpRpcNdjsonSink } from "../src/platform/node/fileRpcNdjsonSink";
 import { createNodeAcpSessionHostRuntime } from "../src/platform/node/nodeAcpSessionHostRuntime";
@@ -343,6 +344,7 @@ wss.on("connection", (ws: WebSocket) => {
         if (parsed.type === "ready") {
             const workspaceFiles = workspaceFilesForAutocomplete(process.cwd());
             const seed = loadReadmeSessionModels();
+            const cachedSeed = readCachedComposerSeed(selectedAgentName);
             send({
                 type: "init",
                 sessionId,
@@ -352,7 +354,14 @@ wss.on("connection", (ws: WebSocket) => {
                 acpAgentName: selectedAgentName,
                 availableAcpAgents: agentConfigs.map((c) => c.name),
                 ...(workspaceFiles !== undefined ? { workspaceFiles } : {}),
-                sessionModels: seed ?? undefined,
+                ...(cachedSeed.configOptions !== null
+                    ? { sessionConfigOptionsSeed: cachedSeed.configOptions }
+                    : {}),
+                ...(cachedSeed.modelSelection !== null
+                    ? { sessionModels: cachedSeed.modelSelection }
+                    : seed !== null
+                      ? { sessionModels: seed }
+                      : {}),
                 lockSessionAgent: false,
             });
             return;
@@ -361,6 +370,17 @@ wss.on("connection", (ws: WebSocket) => {
         if (parsed.type === "resetSession") {
             disposeBridge();
             send({ type: "sessionReset" });
+            const resetSeed = readCachedComposerSeed(selectedAgentName);
+            if (resetSeed.configOptions !== null) {
+                send({
+                    type: "sessionConfigOptions",
+                    options: resetSeed.configOptions,
+                });
+            } else if (resetSeed.modelSelection !== null) {
+                send({ type: "sessionModels", ...resetSeed.modelSelection });
+            } else {
+                send({ type: "sessionConfigOptionsLoading" });
+            }
             void connectAgent();
             return;
         }

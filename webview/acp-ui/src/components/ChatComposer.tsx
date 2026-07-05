@@ -39,6 +39,7 @@ export type ChatComposerProps = {
   workspacePathHint: string;
   modelSelection: AcpUiSessionModelSelection | null;
   sessionConfigOptions: AcpUiSessionConfigOption[] | null;
+  sessionConfigLoading: boolean;
   /** When true, model is shown as a label (standalone: after the first message). */
   modelPickerLocked: boolean;
   promptInFlight: boolean;
@@ -71,6 +72,7 @@ export function ChatComposer({
   workspacePathHint,
   modelSelection,
   sessionConfigOptions,
+  sessionConfigLoading,
   modelPickerLocked,
   promptInFlight,
   inputBlocked,
@@ -149,12 +151,7 @@ export function ChatComposer({
   const useConfigModelPicker =
     configModelOption !== undefined && !agentOrderedLayout;
   const modelSel = modelSelection;
-  const showConfigLoading =
-    !modelPickerLocked &&
-    ((sessionConfigOptions === null &&
-      (modelSel === null || modelSel.availableModels.length === 0)) ||
-      (agentOrderedLayout &&
-        (toolbarConfigOptions === null || toolbarConfigOptions.length === 0)));
+  const showConfigLoading = !modelPickerLocked && sessionConfigLoading;
   const modelReady =
     agentOrderedLayout ||
     useConfigModelPicker ||

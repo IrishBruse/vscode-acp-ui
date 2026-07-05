@@ -16,12 +16,18 @@ import type { AcpHostFilesystem } from "../ports/hostFilesystem";
 import type { AcpRpcNdjsonSink } from "../ports/rpcNdjsonSink";
 import { buildModelId, parseModelIdBracketParams } from "./modelVariantPicker";
 import {
+    type AcpUiSessionConfigOption,
     type AcpUiSessionConfigState,
     modelSelectOptionFromModels,
     resolveAdvertisedModelOptionValue,
     resolveModelConfigWireValue,
     sessionConfigOptionsFromAgent,
 } from "./sessionConfigOptions";
+import {
+    readCachedComposerSeed,
+    writeCachedSessionConfigOptions,
+    writeCachedSessionModels,
+} from "./sessionConfigOptionsCache";
 import {
     type AcpUiSessionModelSelection,
     sessionModelStateToAcpUiSelection,
@@ -462,6 +468,7 @@ export class AcpSessionBridge {
      * session advertises models, applies it before the first `sessionModels` message to the UI.
      */
     async connect(preferredModelId?: string): Promise<void> {
+        this.seedConfigOptionsBeforeConnect();
         const init = await this.agentProcess.start();
         await this.ensureAuthenticated(init);
         const result = await this.newSessionWithAuthRetry(init);
@@ -487,6 +494,7 @@ export class AcpSessionBridge {
             }
             const selection = sessionModelStateToAcpUiSelection(state);
             this.lastModelSelection = selection;
+            writeCachedSessionModels(this.config.name, selection);
             this.postToWebview({ type: "sessionModels", ...selection });
         }
         if (
@@ -667,6 +675,7 @@ export class AcpSessionBridge {
                 return option;
             });
             this.lastConfigOptions = { options };
+            writeCachedSessionConfigOptions(this.config.name, options);
             this.postToWebview({
                 type: "sessionConfigOptions",
                 options,
@@ -678,6 +687,7 @@ export class AcpSessionBridge {
                 currentModelId: wireModelId,
             };
             this.lastModelSelection = next;
+            writeCachedSessionModels(this.config.name, next);
             this.postToWebview({ type: "sessionModels", ...next });
         }
     }
@@ -703,31 +713,60 @@ export class AcpSessionBridge {
         return match?.modelId ?? null;
     }
 
+    private publishConfigOptions(options: AcpUiSessionConfigOption[]): void {
+        if (options.length === 0) {
+            return;
+        }
+        const normalized: AcpUiSessionConfigState = { options };
+        this.lastConfigOptions = normalized;
+        writeCachedSessionConfigOptions(this.config.name, options);
+        this.postToWebview({
+            type: "sessionConfigOptions",
+            options,
+        });
+        const modelOption = options.find(
+            (option) => option.type === "select" && option.category === "model",
+        );
+        if (modelOption?.type === "select") {
+            const selection: AcpUiSessionModelSelection = {
+                currentModelId: modelOption.currentValue,
+                availableModels: modelOption.options.map((choice) => ({
+                    modelId: choice.value,
+                    name: choice.name,
+                })),
+            };
+            this.lastModelSelection = selection;
+            writeCachedSessionModels(this.config.name, selection);
+            this.postToWebview({ type: "sessionModels", ...selection });
+        }
+    }
+
+    private seedConfigOptionsBeforeConnect(): void {
+        if (this.lastConfigOptions !== null) {
+            return;
+        }
+        const seed = readCachedComposerSeed(this.config.name);
+        if (seed.configOptions !== null) {
+            this.publishConfigOptions(seed.configOptions);
+            return;
+        }
+        if (seed.modelSelection !== null) {
+            this.lastModelSelection = seed.modelSelection;
+            this.postToWebview({
+                type: "sessionModels",
+                ...seed.modelSelection,
+            });
+            return;
+        }
+        this.postToWebview({ type: "sessionConfigOptionsLoading" });
+    }
+
     private applyConfigOptions(
         raw: ReadonlyArray<acp.SessionConfigOption>,
     ): void {
         const normalized = sessionConfigOptionsFromAgent(raw);
-        this.lastConfigOptions = normalized;
         if (normalized !== null) {
-            this.postToWebview({
-                type: "sessionConfigOptions",
-                options: normalized.options,
-            });
-            const modelOption = normalized.options.find(
-                (option) =>
-                    option.type === "select" && option.category === "model",
-            );
-            if (modelOption?.type === "select") {
-                const selection: AcpUiSessionModelSelection = {
-                    currentModelId: modelOption.currentValue,
-                    availableModels: modelOption.options.map((choice) => ({
-                        modelId: choice.value,
-                        name: choice.name,
-                    })),
-                };
-                this.lastModelSelection = selection;
-                this.postToWebview({ type: "sessionModels", ...selection });
-            }
+            this.publishConfigOptions(normalized.options);
         }
     }
 

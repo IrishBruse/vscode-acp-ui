@@ -15,6 +15,10 @@ import {
 } from "../acp/config/vscodeSettingsAgents";
 import { CompositeAcpRpcNdjsonSink } from "../acp/ports/rpcNdjsonSink";
 import { AcpSessionBridge } from "../acp/session/acpSessionBridge";
+import {
+    readCachedComposerSeed,
+    sessionConfigOptionsInReplayEvents,
+} from "../acp/session/sessionConfigOptionsCache";
 import { formatPathWithTilde } from "../platform/pathDisplay";
 import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";
 import type {
@@ -115,7 +119,32 @@ export class AcpUiSessionController {
                 events: parsed.events as AcpUiHistoryReplayEvent[],
             });
         }
+        if (
+            !sessionConfigOptionsInReplayEvents(parsed.events) &&
+            this.agentConfig !== undefined
+        ) {
+            this.postSessionConfigSeedOrLoading();
+        }
         void this.ensureBridgeConnected();
+    }
+
+    private postSessionConfigSeedOrLoading(): void {
+        if (this.agentConfig === undefined) {
+            return;
+        }
+        const seed = readCachedComposerSeed(this.agentConfig.name);
+        if (seed.configOptions !== null) {
+            this.post({
+                type: "sessionConfigOptions",
+                options: seed.configOptions,
+            });
+            return;
+        }
+        if (seed.modelSelection !== null) {
+            this.post({ type: "sessionModels", ...seed.modelSelection });
+            return;
+        }
+        this.post({ type: "sessionConfigOptionsLoading" });
     }
 
     private async buildInitPayload(
@@ -139,6 +168,10 @@ export class AcpUiSessionController {
         const availableNames = configs.map((c) => c.name);
         const defaultAgent = this.agentConfig ?? configs[0];
         const workspaceFiles = await workspaceFilesForAutocomplete();
+        const cachedSeed =
+            defaultAgent !== undefined
+                ? readCachedComposerSeed(defaultAgent.name)
+                : { configOptions: null, modelSelection: null };
         return {
             sessionId: header.id,
             title: header.title,
@@ -153,6 +186,12 @@ export class AcpUiSessionController {
             ...(header.promptHistory !== undefined &&
             header.promptHistory.length > 0
                 ? { promptHistory: header.promptHistory }
+                : {}),
+            ...(cachedSeed.configOptions !== null
+                ? { sessionConfigOptionsSeed: cachedSeed.configOptions }
+                : {}),
+            ...(cachedSeed.modelSelection !== null
+                ? { sessionModels: cachedSeed.modelSelection }
                 : {}),
         };
     }
@@ -320,6 +359,7 @@ export class AcpUiSessionController {
                 this.documentReplayDepth -= 1;
             }
             this.postLive({ type: "sessionReset" });
+            this.postSessionConfigSeedOrLoading();
             void this.ensureBridgeConnected();
             return;
         }

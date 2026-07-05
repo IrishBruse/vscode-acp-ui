@@ -661,6 +661,7 @@ export function AcpUiApp({
             workspacePathHint={workspaceText}
             modelSelection={state.modelSelection}
             sessionConfigOptions={state.sessionConfigOptions}
+            sessionConfigLoading={state.sessionConfigLoading}
             modelPickerLocked={state.composerPicksLocked}
             promptInFlight={state.promptInFlight}
             inputBlocked={

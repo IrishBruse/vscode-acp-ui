@@ -1,5 +1,16 @@
 import type { AcpUiSessionModelSelection } from "../../../src/acp/session/sessionModels";
-import type { AcpUiSessionConfigOption } from "../../../src/acp/session/sessionConfigOptions";
+import {
+    modelConfigOption,
+    modelParamCacheKey,
+    resolvedModelParamOptionsForModelPick,
+    type AcpUiSessionConfigOption,
+} from "../../../src/acp/session/sessionConfigOptions";
+import {
+    cacheModelParamOptionsFromSession,
+    readCachedModelParamOptions,
+    writeCachedSessionConfigOptions,
+    writeCachedSessionModels,
+} from "../../../src/acp/session/sessionConfigOptionsCache";
 import type {
     ExtensionToWebviewMessage,
     AcpUiSlashCommand,
@@ -65,6 +76,8 @@ export type ChatState = {
     errorText: string | null;
     modelSelection: AcpUiSessionModelSelection | null;
     sessionConfigOptions: AcpUiSessionConfigOption[] | null;
+    /** True while waiting for agent model/config options (uncached reconnect). */
+    sessionConfigLoading: boolean;
     acpAgentSelection: AcpAgentSelectionState | null;
     slashCommands: AcpUiSlashCommand[];
     permissionPrompt: PermissionPromptState | null;
@@ -125,15 +138,42 @@ function modelSelectionFromConfigOptions(
     };
 }
 
+function isModelConfigPick(
+    options: ReadonlyArray<AcpUiSessionConfigOption>,
+    configId: string,
+): boolean {
+    const option = options.find((row) => row.configId === configId);
+    return option?.type === "select" && option.category === "model";
+}
+
+function agentNameFromState(state: ChatState): string {
+    return state.acpAgentSelection?.currentName ?? "";
+}
+
 function applySessionConfigOptions(
     state: ChatState,
     options: AcpUiSessionConfigOption[],
 ): ChatState {
+    const agentName = agentNameFromState(state);
+    if (agentName.length > 0) {
+        cacheModelParamOptionsFromSession(agentName, options);
+        writeCachedSessionConfigOptions(agentName, options);
+    }
     const modelSelection = modelSelectionFromConfigOptions(options);
     return {
         ...state,
         sessionConfigOptions: options,
+        sessionConfigLoading: false,
         ...(modelSelection !== null ? { modelSelection } : {}),
+    };
+}
+
+function applySessionConfigOptionsLoading(state: ChatState): ChatState {
+    return {
+        ...state,
+        sessionConfigOptions: null,
+        modelSelection: null,
+        sessionConfigLoading: true,
     };
 }
 
@@ -146,6 +186,7 @@ export function createInitialChatState(): ChatState {
         errorText: null,
         modelSelection: null,
         sessionConfigOptions: null,
+        sessionConfigLoading: true,
         acpAgentSelection: null,
         slashCommands: [],
         permissionPrompt: null,
@@ -160,12 +201,25 @@ export function createInitialChatState(): ChatState {
  * Builds initial chat state from the host `init` payload (model list from ACP or standalone readme seed).
  */
 export function createChatStateFromInit(payload: InitPayload): ChatState {
-    return {
+    const base: ChatState = {
         ...createInitialChatState(),
-        modelSelection: payload.sessionModels ?? null,
         acpAgentSelection: buildAcpAgentSelectionFromInit(payload),
         lockSessionAgent: payload.lockSessionAgent === true,
         composerPicksLocked: false,
+    };
+    if (
+        payload.sessionConfigOptionsSeed !== undefined &&
+        payload.sessionConfigOptionsSeed.length > 0
+    ) {
+        return applySessionConfigOptions(base, payload.sessionConfigOptionsSeed);
+    }
+    const hasBootstrapModels =
+        payload.sessionModels !== undefined &&
+        payload.sessionModels.availableModels.length > 0;
+    return {
+        ...base,
+        modelSelection: payload.sessionModels ?? null,
+        sessionConfigLoading: !hasBootstrapModels,
     };
 }
 
@@ -439,6 +493,9 @@ function applySessionReset(state: ChatState): ChatState {
         permissionPrompt: null,
         askQuestionPrompt: null,
         createPlanPrompt: null,
+        sessionConfigOptions: null,
+        modelSelection: null,
+        sessionConfigLoading: true,
     };
 }
 
@@ -474,6 +531,26 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         if (state.composerPicksLocked || state.modelSelection === null) {
             return state;
         }
+        if (state.sessionConfigOptions !== null) {
+            const modelOption = modelConfigOption({
+                options: state.sessionConfigOptions,
+            });
+            if (modelOption !== undefined) {
+                const cached = readCachedModelParamOptions(
+                    agentNameFromState(state),
+                    modelParamCacheKey(action.modelId, modelOption),
+                );
+                return applySessionConfigOptions(
+                    state,
+                    resolvedModelParamOptionsForModelPick(
+                        state.sessionConfigOptions,
+                        modelOption.configId,
+                        action.modelId,
+                        cached,
+                    ),
+                );
+            }
+        }
         return {
             ...state,
             modelSelection: {
@@ -485,6 +562,32 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     if (action.type === "pickSessionConfigOption") {
         if (state.composerPicksLocked || state.sessionConfigOptions === null) {
             return state;
+        }
+        const isModelPick = isModelConfigPick(
+            state.sessionConfigOptions,
+            action.configId,
+        );
+        if (
+            isModelPick &&
+            typeof action.value === "string" &&
+            action.value.length > 0
+        ) {
+            const modelOption = modelConfigOption({
+                options: state.sessionConfigOptions,
+            });
+            const cached = readCachedModelParamOptions(
+                agentNameFromState(state),
+                modelParamCacheKey(action.value, modelOption),
+            );
+            return applySessionConfigOptions(
+                state,
+                resolvedModelParamOptionsForModelPick(
+                    state.sessionConfigOptions,
+                    action.configId,
+                    action.value,
+                    cached,
+                ),
+            );
         }
         const nextOptions = state.sessionConfigOptions.map((option) => {
             if (option.configId !== action.configId) {
@@ -519,16 +622,25 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     switch (action.type) {
         case "sessionReset":
             return applySessionReset(state);
-        case "sessionModels":
+        case "sessionModels": {
+            const modelSelection = {
+                currentModelId: action.currentModelId,
+                availableModels: action.availableModels,
+            };
+            const agentName = agentNameFromState(state);
+            if (agentName.length > 0) {
+                writeCachedSessionModels(agentName, modelSelection);
+            }
             return {
                 ...state,
-                modelSelection: {
-                    currentModelId: action.currentModelId,
-                    availableModels: action.availableModels,
-                },
+                modelSelection,
+                sessionConfigLoading: false,
             };
+        }
         case "sessionConfigOptions":
             return applySessionConfigOptions(state, action.options);
+        case "sessionConfigOptionsLoading":
+            return applySessionConfigOptionsLoading(state);
         case "acpAgentSelection":
             return {
                 ...state,

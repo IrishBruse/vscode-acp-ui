@@ -465,6 +465,109 @@ export function modeConfigOption(
     return byId?.type === "select" ? byId : undefined;
 }
 
+/** Param controls (context, effort, fast, ...) excluding model and mode. */
+export function isModelParamConfigOption(
+    option: AcpUiSessionConfigOption,
+): boolean {
+    if (option.type === "select" && option.category === "model") {
+        return false;
+    }
+    if (isSessionModeConfigOption(option)) {
+        return false;
+    }
+    return true;
+}
+
+export function extractModelParamConfigOptions(
+    options: ReadonlyArray<AcpUiSessionConfigOption>,
+): AcpUiSessionConfigOption[] {
+    return options.filter(isModelParamConfigOption);
+}
+
+/** Stable cache key for model-parameter options (family name when available). */
+export function modelParamCacheKey(
+    modelValue: string,
+    modelOption?: Extract<AcpUiSessionConfigOption, { type: "select" }>,
+): string {
+    if (modelOption !== undefined) {
+        return currentFamilyName(modelOption, modelValue);
+    }
+    return modelLinePrefix(parseModelIdBracketParams(modelValue).base);
+}
+
+export function replaceModelParamConfigOptions(
+    options: ReadonlyArray<AcpUiSessionConfigOption>,
+    modelConfigId: string,
+    newModelValue: string,
+    paramOptions: ReadonlyArray<AcpUiSessionConfigOption>,
+): AcpUiSessionConfigOption[] {
+    const core = options.filter((option) => !isModelParamConfigOption(option));
+    const withModel = core.map((option) =>
+        option.configId === modelConfigId && option.type === "select"
+            ? { ...option, currentValue: newModelValue }
+            : option,
+    );
+    if (paramOptions.length === 0) {
+        return withModel;
+    }
+    const clonedParams = structuredClone(
+        paramOptions,
+    ) as AcpUiSessionConfigOption[];
+    const modelIndex = withModel.findIndex(
+        (option) => option.configId === modelConfigId,
+    );
+    if (modelIndex === -1) {
+        return [...withModel, ...clonedParams];
+    }
+    return [
+        ...withModel.slice(0, modelIndex + 1),
+        ...clonedParams,
+        ...withModel.slice(modelIndex + 1),
+    ];
+}
+
+/**
+ * Applies a model pick using cached or locally derived param options so the
+ * composer does not show stale params while waiting for the agent.
+ */
+export function resolvedModelParamOptionsForModelPick(
+    options: ReadonlyArray<AcpUiSessionConfigOption>,
+    modelConfigId: string,
+    newModelValue: string,
+    cachedParams: ReadonlyArray<AcpUiSessionConfigOption> | null,
+): AcpUiSessionConfigOption[] {
+    if (cachedParams !== null && cachedParams.length > 0) {
+        return replaceModelParamConfigOptions(
+            options,
+            modelConfigId,
+            newModelValue,
+            cachedParams,
+        );
+    }
+    const core = options.filter((option) => !isModelParamConfigOption(option));
+    const withModel = core.map((option) =>
+        option.configId === modelConfigId && option.type === "select"
+            ? { ...option, currentValue: newModelValue }
+            : option,
+    );
+    const modelOption = withModel.find(
+        (
+            option,
+        ): option is Extract<AcpUiSessionConfigOption, { type: "select" }> =>
+            option.configId === modelConfigId && option.type === "select",
+    );
+    const derived = deriveModelParamOptionsFromModelSelect(modelOption);
+    if (derived.length === 0) {
+        return withModel;
+    }
+    return replaceModelParamConfigOptions(
+        withModel,
+        modelConfigId,
+        newModelValue,
+        derived,
+    );
+}
+
 /**
  * Next value when cycling a select config option forward (wraps at the end).
  */

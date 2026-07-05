@@ -272,6 +272,7 @@ const ephemeralExtensionMessageTypes = new Set<string>([
     "cursorAskQuestionRequest",
     "cursorCreatePlanRequest",
     "error",
+    "sessionConfigOptionsLoading",
 ]);
 
 function normalizePromptHistory(entries: unknown): string[] | undefined {

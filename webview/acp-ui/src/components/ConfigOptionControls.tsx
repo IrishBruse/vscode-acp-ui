@@ -35,12 +35,12 @@ export function ComposerConfigLoading({
             <select
                 id={fieldId}
                 className="composer-config-select composer-config-select--model"
-                aria-label={`${label}: Loading`}
+                aria-label={`${label}: Loading model configuration`}
                 aria-busy="true"
                 value="loading"
                 disabled
             >
-                <option value="loading">Loading...</option>
+                <option value="loading">Loading models...</option>
             </select>
         </div>
     );

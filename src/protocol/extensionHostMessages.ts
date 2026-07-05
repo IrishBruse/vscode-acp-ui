@@ -114,6 +114,8 @@ export type ExtensionToWebviewMessage =
            * The model picker may still change until the first user message in standalone mode.
            */
           lockSessionAgent?: boolean;
+          /** Cached config options applied on mount before the agent connects. */
+          sessionConfigOptionsSeed?: AcpUiSessionConfigOption[];
       }
     | {
           type: "sessionModels";
@@ -123,6 +125,10 @@ export type ExtensionToWebviewMessage =
     | {
           type: "sessionConfigOptions";
           options: AcpUiSessionConfigOption[];
+      }
+    | {
+          /** Clears composer model/config picks while the agent session reconnects. */
+          type: "sessionConfigOptionsLoading";
       }
     | {
           type: "acpAgentSelection";
