@@ -10,6 +10,9 @@
 1. Send `clientInfo` (`name`, `version`, optional `title`) on `initialize`.
 2. Surface incompatible protocol versions to the user when negotiation fails.
 
+Zed sends `clientInfo` with `name: "zed"` and the app version on every `initialize`.
+See [client-capabilities.md](./client-capabilities.md).
+
 ## Why
 
 `clientInfo` helps agents and support channels identify the client build.

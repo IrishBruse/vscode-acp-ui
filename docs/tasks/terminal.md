@@ -7,7 +7,10 @@
 
 ## Deliverable
 
-Advertise `terminal: true` on `initialize` and implement SDK `createTerminal` using the VS Code terminal API (output, kill, release as required by v1).
+Advertise `terminal: true` and `_meta.terminal_output: true` on `initialize`.
+Implement SDK `createTerminal` using the VS Code terminal API (output, kill, release as required by v1).
+
+See also [client-capabilities.md](./client-capabilities.md) for Zed parity (`terminal_output` meta).
 
 ## Why
 
@@ -18,7 +21,7 @@ Tool **display** for terminal/execute kinds still works from `session/update` pa
 
 | Area | Today |
 | --- | --- |
-| `initialize` | Does not advertise `terminal: true` |
+| `initialize` | Does not advertise `terminal: true` or `_meta.terminal_output` |
 | `AcpAgentProcess` | `createTerminal` not implemented on `Client` |
 
 ## Key files
@@ -31,6 +34,7 @@ Tool **display** for terminal/execute kinds still works from `session/update` pa
 ## Implementation checklist
 
 - [ ] Advertise `clientCapabilities.terminal: true` on `initialize`
+- [ ] Advertise `_meta.terminal_output: true` on `initialize` (with terminal handlers)
 - [ ] Implement `createTerminal` (cwd, env, shell as per schema)
 - [ ] Wire terminal output streaming back to agent per v1 terminals spec
 - [ ] Implement kill / release lifecycle
