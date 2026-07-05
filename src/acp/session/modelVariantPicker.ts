@@ -105,7 +105,7 @@ function humanizeSlug(slug: string): string {
         /^\d+$/.test(prev) &&
         /^\d+$/.test(last)
     ) {
-        parts.splice(parts.length - 2, 2, `${prev}-${last}`);
+        parts.splice(parts.length - 2, 2, `${prev}.${last}`);
     }
     return parts
         .map((part) => {
@@ -124,7 +124,7 @@ function humanizeSlug(slug: string): string {
 /**
  * Picks a UI label for a model row.
  * Uses the agent `name` when it already looks human-authored, otherwise
- * formats the slug/model id (e.g. `claude-sonnet-4-6` -> `Claude Sonnet 4-6`).
+ * formats the slug/model id (e.g. `claude-sonnet-4-6` -> `Claude Sonnet 4.6`).
  */
 export function formatModelDisplayName(name: string, modelId: string): string {
     const { base } = parseModelIdBracketParams(modelId);

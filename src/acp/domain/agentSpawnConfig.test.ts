@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { buildAcpClientCapabilities } from "../infrastructure/acpAgentProcess";
 import {
+    isCursorAcpAgent,
     parseAcpAgentSpawnConfig,
     parseAcpAgentsJsonFileContent,
     resolveAuthMethodId,
@@ -126,5 +128,58 @@ describe("parseAcpAgentsJsonFileContent", () => {
     it("returns undefined for empty or invalid input", () => {
         expect(parseAcpAgentsJsonFileContent([])).toBeUndefined();
         expect(parseAcpAgentsJsonFileContent(null)).toBeUndefined();
+    });
+});
+
+describe("isCursorAcpAgent", () => {
+    it("detects cursor-agent and agent acp invocations", () => {
+        expect(
+            isCursorAcpAgent({
+                name: "Cursor",
+                command: "cursor-agent",
+                args: ["acp"],
+            }),
+        ).toBe(true);
+        expect(
+            isCursorAcpAgent({
+                name: "Cursor",
+                command: "agent",
+                args: ["acp"],
+            }),
+        ).toBe(true);
+        expect(
+            isCursorAcpAgent({
+                name: "Gemini",
+                command: "gemini",
+                args: ["--stdio"],
+            }),
+        ).toBe(false);
+    });
+});
+
+describe("buildAcpClientCapabilities", () => {
+    it("advertises parameterized model picker support for Cursor", () => {
+        expect(
+            buildAcpClientCapabilities({
+                name: "Cursor",
+                command: "cursor-agent",
+                args: ["acp"],
+            }),
+        ).toEqual({
+            fs: { readTextFile: true, writeTextFile: true },
+            _meta: { parameterizedModelPicker: true },
+        });
+    });
+
+    it("omits Cursor meta for other agents", () => {
+        expect(
+            buildAcpClientCapabilities({
+                name: "Gemini",
+                command: "gemini",
+                args: ["--stdio"],
+            }),
+        ).toEqual({
+            fs: { readTextFile: true, writeTextFile: true },
+        });
     });
 });

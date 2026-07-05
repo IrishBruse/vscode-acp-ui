@@ -17,17 +17,18 @@ import type { AcpUiSessionModelSelection } from "../../../../src/acp/session/ses
 import {
   groupedModelChoices,
   modelConfigOption,
-  modelConfigSummaryLabel,
   modelParameterOptions,
   pickModelOptionForFamily,
   resolveDerivedModelParamPick,
   resolveModelSelectOption,
   isDerivedConfigId,
+  usesAgentOrderedConfigLayout,
+  configOptionsSummaryLabel,
 } from "../../../../src/acp/session/sessionConfigOptions";
 import type { AcpUiSessionConfigOption } from "../../../../src/acp/session/sessionConfigOptions";
 import type { AcpUiSlashCommand } from "../../../../src/protocol/extensionHostMessages";
 import { buildComposerAutocompleteState, wrapIndex } from "./composerAutocomplete";
-import { ModelConfigPopover } from "./ModelConfigPopover";
+import { ConfigOptionControls } from "./ConfigOptionControls";
 
 export type ChatComposerProps = {
   activityLabel: string | null;
@@ -101,14 +102,17 @@ export function ChatComposer({
   useEffect(() => {
     activeItemRef.current?.scrollIntoView({ block: "nearest" });
   }, [activeIndex, autocomplete?.items.length]);
-  const configModelOption = useMemo(
+  const configState = useMemo(
     () =>
-      modelConfigOption(
-        sessionConfigOptions !== null
-          ? { options: sessionConfigOptions }
-          : null,
-      ),
+      sessionConfigOptions !== null
+        ? { options: sessionConfigOptions }
+        : null,
     [sessionConfigOptions],
+  );
+  const agentOrderedLayout = usesAgentOrderedConfigLayout(configState);
+  const configModelOption = useMemo(
+    () => modelConfigOption(configState),
+    [configState],
   );
   const configModelGroups = useMemo(
     () =>
@@ -118,29 +122,19 @@ export function ChatComposer({
     [configModelOption],
   );
   const configParamOptions = useMemo(
-    () =>
-      modelParameterOptions(
-        sessionConfigOptions !== null
-          ? { options: sessionConfigOptions }
-          : null,
-        modelSelection,
-      ),
-    [sessionConfigOptions, modelSelection],
+    () => modelParameterOptions(configState, modelSelection),
+    [configState, modelSelection],
   );
   const resolvedModelOption = useMemo(
-    () =>
-      resolveModelSelectOption(
-        sessionConfigOptions !== null
-          ? { options: sessionConfigOptions }
-          : null,
-        modelSelection,
-      ),
-    [sessionConfigOptions, modelSelection],
+    () => resolveModelSelectOption(configState, modelSelection),
+    [configState, modelSelection],
   );
   const useLegacyModelPath = configModelOption === undefined;
-  const useConfigModelPicker = configModelOption !== undefined;
+  const useConfigModelPicker =
+    configModelOption !== undefined && !agentOrderedLayout;
   const modelSel = modelSelection;
   const modelReady =
+    agentOrderedLayout ||
     useConfigModelPicker ||
     (modelSel !== null && modelSel.availableModels.length > 0);
   const modelSelectDisabled =
@@ -166,12 +160,14 @@ export function ChatComposer({
     }
     return parseModelIdBracketParams(configModelOption.currentValue).base;
   }, [configModelOption]);
-  const modelLabel = useConfigModelPicker
-    ? formatModelDisplayName(
-        configCurrentGroupName,
-        configModelOption?.currentValue ?? "",
-      )
-    : (modelPickerState?.currentGroupLabel ?? "");
+  const modelLabel = agentOrderedLayout
+    ? configOptionsSummaryLabel(sessionConfigOptions ?? [])
+    : useConfigModelPicker
+      ? formatModelDisplayName(
+          configCurrentGroupName,
+          configModelOption?.currentValue ?? "",
+        )
+      : (modelPickerState?.currentGroupLabel ?? "");
 
   const handleModelParamPick = (
     configId: string,
@@ -275,18 +271,36 @@ export function ChatComposer({
         />
       </div>
       <div className="composer-footer">
-        <div className="composer-footer-model">
-          <span className="composer-inline-label">Model</span>
+        <div
+          className={
+            agentOrderedLayout
+              ? "composer-footer-model composer-footer-config"
+              : "composer-footer-model"
+          }
+        >
+          {!agentOrderedLayout ? (
+            <span className="composer-inline-label">Model</span>
+          ) : null}
           {modelPickerLocked ? (
             <>
               <span
                 className="composer-pick-value"
                 title={modelLabel}
-                aria-label={`Model: ${modelLabel}`}
+                aria-label={
+                  agentOrderedLayout
+                    ? `Session config: ${modelLabel}`
+                    : `Model: ${modelLabel}`
+                }
               >
                 {modelLabel.length > 0 ? modelLabel : "\u2014"}
               </span>
             </>
+          ) : agentOrderedLayout && sessionConfigOptions !== null ? (
+            <ConfigOptionControls
+              options={sessionConfigOptions}
+              disabled={modelSelectDisabled}
+              onPick={onPickSessionConfigOption}
+            />
           ) : (
             <>
               {useConfigModelPicker && configModelOption !== undefined ? (
@@ -339,7 +353,8 @@ export function ChatComposer({
                     ).params;
                     const variants = group.variants.map((variant) => ({
                       modelId: variant.modelId,
-                      params: parseModelIdBracketParams(variant.modelId).params,
+                      params: parseModelIdBracketParams(variant.modelId)
+                        .params,
                     }));
                     onPickSessionModel(
                       pickVariantForGroup(variants, preferredParams),
@@ -360,9 +375,8 @@ export function ChatComposer({
                 </select>
               )}
               {configParamOptions.length > 0 ? (
-                <ModelConfigPopover
+                <ConfigOptionControls
                   options={configParamOptions}
-                  summaryLabel={modelConfigSummaryLabel(configParamOptions)}
                   disabled={modelSelectDisabled}
                   onPick={handleModelParamPick}
                 />

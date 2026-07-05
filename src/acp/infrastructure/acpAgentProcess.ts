@@ -1,7 +1,11 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { Readable, Transform, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
-import type { AcpAgentSpawnConfig } from "../domain/agentSpawnConfig";
+import {
+    type AcpAgentSpawnConfig,
+    isCursorAcpAgent,
+    PARAMETERIZED_MODEL_PICKER_META_KEY,
+} from "../domain/agentSpawnConfig";
 import type { AcpHostFilesystem } from "../ports/hostFilesystem";
 import type { AcpRpcNdjsonSink } from "../ports/rpcNdjsonSink";
 
@@ -75,6 +79,21 @@ function ndJsonStreamTapsForChild(
 
 /** Callback invoked whenever the agent sends a session/update notification. */
 export type SessionUpdateHandler = (params: acp.SessionNotification) => void;
+
+/** Client capabilities for the ACP initialize handshake (matches Zed for Cursor). */
+export function buildAcpClientCapabilities(
+    config: AcpAgentSpawnConfig,
+): acp.ClientCapabilities {
+    const capabilities: acp.ClientCapabilities = {
+        fs: { readTextFile: true, writeTextFile: true },
+    };
+    if (isCursorAcpAgent(config)) {
+        capabilities._meta = {
+            [PARAMETERIZED_MODEL_PICKER_META_KEY]: true,
+        };
+    }
+    return capabilities;
+}
 
 /** Resolves `session/request_permission` (UI surfaces this as a dialog). */
 export type RequestPermissionHandler = (
@@ -195,9 +214,7 @@ export class AcpAgentProcess {
 
         const response = await this.connection.initialize({
             protocolVersion: acp.PROTOCOL_VERSION,
-            clientCapabilities: {
-                fs: { readTextFile: true, writeTextFile: true },
-            },
+            clientCapabilities: buildAcpClientCapabilities(this.options.config),
         });
 
         this.initResponse = response;

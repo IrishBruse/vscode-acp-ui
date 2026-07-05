@@ -81,7 +81,13 @@ describe("formatModelDisplayName", () => {
                 "claude-sonnet-4-6",
                 "claude-sonnet-4-6[thinking=true]",
             ),
-        ).toBe("Claude Sonnet 4-6");
+        ).toBe("Claude Sonnet 4.6");
+        expect(
+            formatModelDisplayName(
+                "claude-opus-4-8",
+                "claude-opus-4-8[thinking=true]",
+            ),
+        ).toBe("Claude Opus 4.8");
         expect(
             formatModelDisplayName(
                 "gemini-3-pro-preview",
