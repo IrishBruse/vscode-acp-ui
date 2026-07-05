@@ -36,6 +36,7 @@ import {
     appendSessionEvent,
     clearSessionFileLog,
     parseSessionFile,
+    shouldDeferJsonlHistoryReplay,
     shouldPersistExtensionMessage,
     updateSessionHeader,
 } from "./acpUiSessionJsonl";
@@ -69,6 +70,9 @@ export class AcpUiSessionController {
     private pendingModelId: string | undefined;
     private replayedEventCount = 0;
     private documentReplayDepth = 0;
+    private deferredJsonlReplayAtBootstrap = false;
+    private savedJsonlEventsForLoadFallback: AcpUiSessionReplayEvent[] = [];
+    private agentLoadInProgress = false;
     private readonly disposables: Array<{ dispose(): void }> = [];
 
     constructor(private readonly options: SessionControllerOptions) {
@@ -137,17 +141,19 @@ export class AcpUiSessionController {
     async sendBootstrapMessages(header: AcpUiSessionHeader): Promise<void> {
         const parsed = parseSessionFile(this.options.document.getText());
         const initPayload = await this.buildInitPayload(header);
-        this.post({ type: "init", ...initPayload });
-        void this.postMarkdownThemeVariables();
-        const willResumeFromAgent =
-            header.runtimeSessionId !== undefined &&
-            header.runtimeSessionId.trim().length > 0;
-        if (parsed.events.length > 0 && !willResumeFromAgent) {
+        this.deferredJsonlReplayAtBootstrap =
+            shouldDeferJsonlHistoryReplay(header);
+        if (
+            parsed.events.length > 0 &&
+            !this.deferredJsonlReplayAtBootstrap
+        ) {
             this.post({
                 type: "historyReplay",
                 events: parsed.events as AcpUiHistoryReplayEvent[],
             });
         }
+        this.post({ type: "init", ...initPayload });
+        void this.postMarkdownThemeVariables();
         if (
             !sessionConfigOptionsInReplayEvents(parsed.events) &&
             this.agentConfig !== undefined
@@ -256,6 +262,46 @@ export class AcpUiSessionController {
                 continue;
             }
             this.postLive(event);
+        }
+    }
+
+    private replayJsonlEventsToWebview(
+        events: ReadonlyArray<AcpUiSessionReplayEvent>,
+    ): void {
+        for (const event of events) {
+            this.postLive(event as ExtensionToWebviewMessage);
+        }
+    }
+
+    private async restoreJsonlEvents(
+        events: ReadonlyArray<AcpUiSessionReplayEvent>,
+    ): Promise<void> {
+        this.documentReplayDepth += 1;
+        try {
+            for (const event of events) {
+                await appendSessionEvent(this.documentUri, event);
+            }
+            this.replayedEventCount = events.length;
+        } catch (err: unknown) {
+            const detail = err instanceof Error ? err.message : String(err);
+            console.warn(
+                `[ACP UI] Failed to restore session log after load failure: ${detail}`,
+            );
+        } finally {
+            this.documentReplayDepth -= 1;
+        }
+    }
+
+    private async replayDeferredJsonlAfterConnect(): Promise<void> {
+        if (!this.deferredJsonlReplayAtBootstrap) {
+            return;
+        }
+        if (this.savedJsonlEventsForLoadFallback.length > 0) {
+            return;
+        }
+        const events = parseSessionFile(this.options.document.getText()).events;
+        if (events.length > 0) {
+            this.replayJsonlEventsToWebview(events);
         }
     }
 
@@ -383,15 +429,12 @@ export class AcpUiSessionController {
         this.pendingModelId = undefined;
         const header = parseSessionFile(this.options.document.getText()).header;
         const runtimeSessionId = header?.runtimeSessionId?.trim();
-        const mayResume =
-            runtimeSessionId !== undefined && runtimeSessionId.length > 0;
-        if (mayResume) {
-            this.postLive({ type: "sessionHistoryLoading", loading: true });
-        }
         try {
             await bridge.connect({
                 preferredModelId: preferred,
-                ...(mayResume ? { runtimeSessionId } : {}),
+                ...(runtimeSessionId !== undefined && runtimeSessionId.length > 0
+                    ? { runtimeSessionId }
+                    : {}),
             });
             const connectedSessionId = bridge.sessionId;
             if (connectedSessionId !== null) {
@@ -400,10 +443,23 @@ export class AcpUiSessionController {
                     connectedSessionId,
                 );
             }
+            await this.replayDeferredJsonlAfterConnect();
+            this.deferredJsonlReplayAtBootstrap = false;
+            this.savedJsonlEventsForLoadFallback = [];
             this.options.refreshChatsList?.();
             return bridge;
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
+            if (this.savedJsonlEventsForLoadFallback.length > 0) {
+                this.replayJsonlEventsToWebview(
+                    this.savedJsonlEventsForLoadFallback,
+                );
+                await this.restoreJsonlEvents(
+                    this.savedJsonlEventsForLoadFallback,
+                );
+                this.savedJsonlEventsForLoadFallback = [];
+            }
+            this.deferredJsonlReplayAtBootstrap = false;
             window.showErrorMessage(`Failed to connect to agent: ${message}`);
             this.post({
                 type: "error",
@@ -413,16 +469,21 @@ export class AcpUiSessionController {
             this.bridge = undefined;
             return undefined;
         } finally {
-            if (mayResume) {
+            if (this.agentLoadInProgress) {
                 this.postLive({
                     type: "sessionHistoryLoading",
                     loading: false,
                 });
+                this.agentLoadInProgress = false;
             }
         }
     }
 
     private async prepareSessionFileForResume(): Promise<void> {
+        const parsed = parseSessionFile(this.options.document.getText());
+        this.savedJsonlEventsForLoadFallback = [...parsed.events];
+        this.agentLoadInProgress = true;
+        this.postLive({ type: "sessionHistoryLoading", loading: true });
         this.documentReplayDepth += 1;
         try {
             await clearSessionFileLog(this.documentUri);

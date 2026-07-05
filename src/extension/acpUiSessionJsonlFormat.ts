@@ -312,6 +312,17 @@ function normalizePromptHistory(entries: unknown): string[] | undefined {
 }
 
 /**
+ * True when chat open should wait for ACP `session/load` before replaying JSONL.
+ * A stored runtime id alone is not enough: agents without `loadSession` still use JSONL.
+ */
+export function shouldDeferJsonlHistoryReplay(header: {
+    runtimeSessionId?: string;
+}): boolean {
+    const runtimeSessionId = header.runtimeSessionId?.trim();
+    return runtimeSessionId !== undefined && runtimeSessionId.length > 0;
+}
+
+/**
  * True when an extension-to-webview message should be appended to the session log.
  */
 export function shouldPersistExtensionMessage(

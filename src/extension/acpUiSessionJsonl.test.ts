@@ -9,6 +9,7 @@ import {
     parseSessionRecordAtLine,
     serializeSessionHeader,
     serializeSessionRecord,
+    shouldDeferJsonlHistoryReplay,
     shouldPersistExtensionMessage,
 } from "./acpUiSessionJsonlFormat";
 
@@ -180,6 +181,58 @@ describe("parseSessionEventLines", () => {
             JSON.stringify({ type: "permissionRequest", requestId: "1" }),
         ]);
         expect(events).toEqual([{ type: "submit", body: "x" }]);
+    });
+});
+
+describe("shouldDeferJsonlHistoryReplay", () => {
+    it("defers when a runtime session id is stored", () => {
+        expect(
+            shouldDeferJsonlHistoryReplay({ runtimeSessionId: "runtime-1" }),
+        ).toBe(true);
+        expect(
+            shouldDeferJsonlHistoryReplay({ runtimeSessionId: "  runtime-1  " }),
+        ).toBe(true);
+    });
+
+    it("does not defer without a runtime session id", () => {
+        expect(shouldDeferJsonlHistoryReplay({})).toBe(false);
+        expect(shouldDeferJsonlHistoryReplay({ runtimeSessionId: "" })).toBe(
+            false,
+        );
+        expect(shouldDeferJsonlHistoryReplay({ runtimeSessionId: "   " })).toBe(
+            false,
+        );
+    });
+});
+
+describe("append and replay round-trip", () => {
+    it("replays a transcript built from serialized append blocks", () => {
+        const header = {
+            schema: ACP_UI_SESSION_SCHEMA,
+            id: "ui-session-uuid",
+            title: "Chat",
+            runtimeSessionId: "agent-runtime-id",
+            createdAt: 1,
+            updatedAt: 2,
+        };
+        const events = [
+            { type: "submit" as const, body: "hello" },
+            { type: "appendAgentText" as const, text: "world" },
+            { type: "turnComplete" as const, stopReason: "end_turn" },
+        ];
+        const lines = [serializeSessionHeader(header).trimEnd()];
+        for (const event of events) {
+            lines.push(
+                serializeSessionRecord(event, {
+                    record: "event",
+                    type: event.type,
+                }).trimEnd(),
+            );
+        }
+        const parsed = parseSessionFile(`${lines.join("\n")}\n`);
+        expect(parsed.header?.id).toBe("ui-session-uuid");
+        expect(parsed.header?.runtimeSessionId).toBe("agent-runtime-id");
+        expect(parsed.events).toEqual(events);
     });
 });
 

@@ -37,9 +37,15 @@ export {
     parseSessionHeaderLine,
     serializeSessionHeader,
     serializeSessionRecord,
+    shouldDeferJsonlHistoryReplay,
     shouldPersistExtensionMessage,
 } from "./acpUiSessionJsonlFormat";
 
+/**
+ * Client-owned transcript files (`acpUi/session/1`) back the chat UI when ACP
+ * `session/load` is unavailable or fails.
+ * When load succeeds, the log is cleared and agent replay becomes the source of truth.
+ */
 const sessionsDirectorySettingKey = "ib-acp-ui.sessionsDirectory";
 const chatsSubdir = "chats";
 

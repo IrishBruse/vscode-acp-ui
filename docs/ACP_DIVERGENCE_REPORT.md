@@ -20,7 +20,7 @@
 - [ ] **Unsaved buffer reads** -- `readTextFile` reflects open editor buffers, not only on-disk content
 - [ ] **`line` / `limit` on read** -- support partial file reads per v1 schema
 - [ ] **ENOENT semantics** -- decide whether to keep empty-string workaround or align with spec error responses
-- [ ] **JSONL persistence** -- wire `acpUiSessionJsonl` append and `historyReplay` into `acpUiPanel`
+- [x] **JSONL persistence** -- wire `acpUiSessionJsonl` append and `historyReplay` into the session editor
 - [ ] **`cursor/create_plan` phases** -- forward `phases` from bridge to webview
 - [ ] **`cursor/update_todos` UI** -- dedicated todo panel instead of plan-style trace lines
 - [ ] **`cursor/task` UI** -- richer subagent task display
@@ -246,12 +246,11 @@ ACP UI maintains **two parallel session concepts**:
 
 Additional **JSONL session files** (`src/extension/acpUiSessionJsonl.ts`, schema `acpUi/session/1`):
 
-- Defines header + replay events and `historyReplay` message type.
-- **Not yet integrated** into `acpUiPanel.ts` (no imports of `appendSessionEvent` outside tests).
-- `historyReplay` exists in protocol types but is unused in the live extension path.
+- Header + replay events and `historyReplay` message type.
+- Integrated in `acpUiSessionController.ts`: appends on chat traffic, replays on open when agent load is skipped or fails.
+- When `session/load` succeeds, the log is cleared and agent replay is authoritative.
 
-This is a major product divergence from ACP's `session/load` replay model.
-The repo is building **client-owned transcript persistence** instead of (or in addition to) agent replay.
+This supplements ACP's `session/load` replay model with **client-owned transcript persistence**.
 
 ---
 
@@ -290,7 +289,7 @@ These divergences appear deliberate for the current product scope:
 | P0 | No `session/load` / replay | Users lose agent conversation context when reopening chats |
 | P0 | No `authenticate` | Agents requiring post-`initialize` auth fail silently or error |
 | P1 | No terminal client | Some agents cannot execute tools that need `terminal/create` |
-| P1 | JSONL persistence unwired | Transcript work is incomplete relative to local session files design |
+| P1 | JSONL persistence | Done: local transcript append + `historyReplay` fallback |
 | P2 | Unhandled `session/update` variants | Missing modes, usage, titles, load replay chunks |
 | P2 | MCP list always empty | May limit MCP unless agent loads config independently |
 | P2 | Cursor extension UX thin | Todos, tasks, and images are not first-class UI |
