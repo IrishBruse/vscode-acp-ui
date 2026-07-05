@@ -266,6 +266,21 @@ export class AcpUiSessionController {
         }
     }
 
+    private async applySessionInfoUpdate(update: {
+        title?: string | null;
+    }): Promise<void> {
+        const title = update.title;
+        if (typeof title !== "string" || title.trim().length === 0) {
+            return;
+        }
+        const nextTitle = title.trim();
+        const renamed = await renameAcpUiSession(this.sessionId, nextTitle);
+        if (renamed) {
+            setAcpUiCustomEditorTabTitle(this.documentUri, nextTitle);
+            this.options.refreshChatsList?.();
+        }
+    }
+
     private disposeBridge(): void {
         if (this.bridge !== undefined) {
             this.bridge.dispose();
@@ -299,19 +314,35 @@ export class AcpUiSessionController {
             config,
             (msg) => this.post(msg),
             host,
+            {
+                onSessionInfoUpdate: (update) => {
+                    void this.applySessionInfoUpdate(update);
+                },
+            },
         );
         this.bridge = bridge;
         const preferred = this.pendingModelId;
         this.pendingModelId = undefined;
         try {
-            await bridge.connect(preferred);
-            const runtimeSessionId = bridge.sessionId;
-            if (runtimeSessionId !== null) {
+            const header = parseSessionFile(
+                this.options.document.getText(),
+            ).header;
+            const runtimeSessionId = header?.runtimeSessionId;
+            await bridge.connect({
+                preferredModelId: preferred,
+                ...(runtimeSessionId !== undefined &&
+                runtimeSessionId.length > 0
+                    ? { runtimeSessionId }
+                    : {}),
+            });
+            const connectedSessionId = bridge.sessionId;
+            if (connectedSessionId !== null) {
                 void setAcpUiSessionRuntimeSessionId(
                     this.sessionId,
-                    runtimeSessionId,
+                    connectedSessionId,
                 );
             }
+            this.options.refreshChatsList?.();
             return bridge;
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);

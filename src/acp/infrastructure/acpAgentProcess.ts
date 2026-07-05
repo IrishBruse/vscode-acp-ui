@@ -245,6 +245,84 @@ export class AcpAgentProcess {
         await this.connection.unstable_logout({});
     }
 
+    getInitializeResponse(): acp.InitializeResponse | null {
+        return this.initResponse;
+    }
+
+    supportsListSessions(): boolean {
+        return (
+            this.initResponse?.agentCapabilities?.sessionCapabilities?.list !=
+            null
+        );
+    }
+
+    supportsLoadSession(): boolean {
+        return this.initResponse?.agentCapabilities?.loadSession === true;
+    }
+
+    supportsDeleteSessions(): boolean {
+        const sessionCapabilities = this.initResponse?.agentCapabilities
+            ?.sessionCapabilities as { delete?: unknown } | undefined;
+        return sessionCapabilities?.delete != null;
+    }
+
+    async listSessions(
+        params: acp.ListSessionsRequest = {},
+    ): Promise<acp.ListSessionsResponse> {
+        if (!this.connection) {
+            throw new Error("Agent not started");
+        }
+        if (!this.supportsListSessions()) {
+            throw new Error("Agent does not support session/list");
+        }
+        return this.connection.listSessions(params);
+    }
+
+    /** Fetches every page of `session/list` for the given filter. */
+    async listAllSessions(cwd?: string): Promise<acp.SessionInfo[]> {
+        const sessions: acp.SessionInfo[] = [];
+        let cursor: string | null | undefined;
+        do {
+            const response = await this.listSessions({
+                ...(cwd !== undefined ? { cwd } : {}),
+                ...(cursor !== undefined && cursor !== null && cursor.length > 0
+                    ? { cursor }
+                    : {}),
+            });
+            sessions.push(...response.sessions);
+            cursor = response.nextCursor;
+        } while (cursor != null && cursor.length > 0);
+        return sessions;
+    }
+
+    async loadSession(sessionId: string): Promise<acp.LoadSessionResponse> {
+        if (!this.connection) {
+            throw new Error("Agent not started");
+        }
+        if (!this.supportsLoadSession()) {
+            throw new Error("Agent does not support session/load");
+        }
+        const cwd = this.options.getWorkspaceRoot() ?? process.cwd();
+        return this.connection.loadSession({
+            sessionId,
+            cwd,
+            mcpServers: [],
+        });
+    }
+
+    async deleteSession(sessionId: string): Promise<void> {
+        if (!this.connection) {
+            throw new Error("Agent not started");
+        }
+        if (!this.supportsDeleteSessions()) {
+            throw new Error("Agent does not support session/delete");
+        }
+        const rpc = this.connection as unknown as {
+            sendRequest<Req, Resp>(method: string, params?: Req): Promise<Resp>;
+        };
+        await rpc.sendRequest("session/delete", { sessionId });
+    }
+
     async newSession(): Promise<acp.NewSessionResponse> {
         if (!this.connection) {
             throw new Error("Agent not started");

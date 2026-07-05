@@ -241,6 +241,19 @@ function buildAcpAgentSelectionFromInit(
     return null;
 }
 
+function appendUserText(state: ChatState, text: string): ChatState {
+    const last = state.trace[state.trace.length - 1];
+    if (last?.type === "user") {
+        const trace = state.trace.slice();
+        trace[trace.length - 1] = { type: "user", text: last.text + text };
+        return { ...state, trace };
+    }
+    return {
+        ...state,
+        trace: [...state.trace, { type: "user" as const, text }],
+    };
+}
+
 function appendAgentText(state: ChatState, text: string): ChatState {
     const open = state.openStreamIndex;
     if (open !== null) {
@@ -651,6 +664,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             };
         case "appendAgentText":
             return appendAgentText(state, action.text);
+        case "appendUserText":
+            return appendUserText(state, action.text);
         case "appendAgentThought":
             return appendAgentThought(state, action.text, action.durationMs);
         case "appendToolCall":

@@ -660,6 +660,13 @@ export function sessionUpdateToWebviewMessages(
             }
             return [];
         }
+        case "user_message_chunk": {
+            const block = update.content;
+            if (block.type === "text") {
+                return [{ type: "appendUserText", text: block.text }];
+            }
+            return [];
+        }
         case "tool_call": {
             toolKindTracking?.kindByToolId.set(update.toolCallId, update.kind);
             const subtitle = toolCallSubtitleFromToolCall(update);

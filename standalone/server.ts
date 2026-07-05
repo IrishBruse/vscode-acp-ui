@@ -302,7 +302,7 @@ wss.on("connection", (ws: WebSocket) => {
         const next = new AcpSessionBridge(cfg, send, hostRuntime);
         bridge = next;
         const preferred = userPreferredModelId ?? undefined;
-        await next.connect(preferred);
+        await next.connect({ preferredModelId: preferred });
     }
 
     async function connectAgent(): Promise<void> {

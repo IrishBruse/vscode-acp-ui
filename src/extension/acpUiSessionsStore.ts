@@ -146,6 +146,54 @@ export function listAcpUiSessions(): AcpUiSessionRecord[] {
     return [...sessions];
 }
 
+/** Sessions for one agent from the local `.acp` index. */
+export function listAcpUiSessionsForAgent(
+    agentName: string,
+): AcpUiSessionRecord[] {
+    return sessions.filter((row) => row.agentName === agentName);
+}
+
+export function findByRuntimeSessionId(
+    agentName: string,
+    runtimeSessionId: string,
+): AcpUiSessionRecord | undefined {
+    return sessions.find(
+        (row) =>
+            row.agentName === agentName && row.sessionId === runtimeSessionId,
+    );
+}
+
+export type EnsureLocalSessionInput = {
+    agentName: string;
+    runtimeSessionId: string;
+    title: string;
+};
+
+/**
+ * Returns an existing local session linked to the agent runtime id, or creates a `.acp` shell.
+ */
+export async function ensureLocalSessionForAgentSession(
+    input: EnsureLocalSessionInput,
+): Promise<AcpUiSessionRecord> {
+    const existing = findByRuntimeSessionId(
+        input.agentName,
+        input.runtimeSessionId,
+    );
+    if (existing !== undefined) {
+        return existing;
+    }
+    if (extensionContext === null) {
+        throw new Error("ACP UI sessions store is not initialized.");
+    }
+    const created = await createSessionFile(extensionContext, input.title, {
+        agentName: input.agentName,
+        runtimeSessionId: input.runtimeSessionId,
+    });
+    const record = indexFromHeader(created.header, created.uri);
+    sessions.push(record);
+    return record;
+}
+
 export function getAcpUiSession(id: string): AcpUiSessionRecord | undefined {
     return sessions.find((s) => s.id === id);
 }

@@ -1,3 +1,4 @@
+import type * as acp from "@agentclientprotocol/sdk";
 import {
     commands,
     type Event,
@@ -8,14 +9,26 @@ import {
     type TreeDataProvider,
     TreeItem,
     TreeItemCollapsibleState,
+    type TreeView,
     window,
     workspace,
 } from "vscode";
-import {
-    getAcpAgentConfigByName,
-    getAcpAgentConfigsFromSettings,
-} from "../acp/config/vscodeSettingsAgents";
+import { getAcpAgentConfigsFromSettings } from "../acp/config/vscodeSettingsAgents";
+import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";
 import { registerCommandIB } from "../utils/vscode";
+import {
+    deleteAgentSession,
+    fetchAgentSessionsForWorkspace,
+} from "./acpAgentSessionLister";
+import {
+    sessionInfoLabel,
+    sortSessionInfos,
+} from "./acpAgentSessionListFormat";
+import {
+    getActiveAgentConfig,
+    initializeAcpUiActiveAgent,
+    setActiveAgentName,
+} from "./acpUiActiveAgent";
 import {
     disposeAcpUiEditorForSession,
     openOrRevealAcpUiEditor,
@@ -23,14 +36,16 @@ import {
 } from "./acpUiPanel";
 import { resolveSessionsDirectoryUri } from "./acpUiSessionJsonl";
 import {
-    type AcpUiSessionRecord,
+    ensureLocalSessionForAgentSession,
+    findByRuntimeSessionId,
     getActiveAcpUiSessionId,
-    listAcpUiSessions,
+    listAcpUiSessionsForAgent,
     refreshAcpUiSessionsFromDisk,
     removeAcpUiSession,
     setActiveAcpUiSessionId,
     touchAcpUiSession,
 } from "./acpUiSessionsStore";
+import { getAcpUiExtensionActivation } from "./extensionServices";
 
 const viewIdAcpUiSessions = "acpUiSessionsView";
 
@@ -39,25 +54,27 @@ const cmdRefreshAcpUiSessions = "ib-acp-ui.refreshAcpUiSessions";
 const cmdOpenAcpUiSession = "ib-acp-ui.openAcpUiSession";
 const cmdDeleteAcpUiSession = "ib-acp-ui.deleteAcpUiSession";
 const cmdRenameAcpUiSession = "ib-acp-ui.renameAcpUiSession";
+const cmdSelectActiveAgent = "ib-acp-ui.selectActiveAgent";
 
 const iconChat = "comment-discussion";
 
 type AcpUiSessionsTreeNode = AcpUiSessionTreeItem | AcpUiPlaceholderTreeItem;
 
 class AcpUiPlaceholderTreeItem extends TreeItem {
-    constructor() {
-        super("No chats yet", TreeItemCollapsibleState.None);
+    constructor(message: string) {
+        super(message, TreeItemCollapsibleState.None);
         this.contextValue = "placeholder";
-        this.tooltip =
-            "Use New ACP UI in Editor on the Chats view title to create a chat";
+        this.tooltip = message;
     }
 }
 
 class AcpUiSessionTreeItem extends TreeItem {
     constructor(
-        public readonly sessionId: string,
+        public readonly runtimeSessionId: string,
         label: string,
         isActive: boolean,
+        public readonly agentName: string,
+        public readonly localSessionId?: string,
     ) {
         super(label, TreeItemCollapsibleState.None);
         this.contextValue = "session";
@@ -67,7 +84,7 @@ class AcpUiSessionTreeItem extends TreeItem {
         this.command = {
             title: "Open Chat",
             command: cmdOpenAcpUiSession,
-            arguments: [sessionId],
+            arguments: [runtimeSessionId, agentName],
         };
     }
 }
@@ -76,7 +93,10 @@ export class AcpUiSessionsViewProvider
     implements TreeDataProvider<AcpUiSessionsTreeNode>
 {
     private changeEvent = new EventEmitter<AcpUiSessionsTreeNode | undefined>();
-    private focusedSessionId: string | null = null;
+    private focusedRuntimeSessionId: string | null = null;
+    private agentSessions: acp.SessionInfo[] = [];
+    private agentListSupported = false;
+    private treeView: TreeView<AcpUiSessionsTreeNode> | undefined;
 
     private readonly extensionContext: ExtensionContext;
 
@@ -92,20 +112,32 @@ export class AcpUiSessionsViewProvider
      * Registers the Chats tree view and session commands. Returns a function that refreshes the tree.
      */
     static activate(context: ExtensionContext): () => void {
+        initializeAcpUiActiveAgent(context);
         const provider = new AcpUiSessionsViewProvider(context);
         const treeView = window.createTreeView(viewIdAcpUiSessions, {
             treeDataProvider: provider,
         });
+        provider.treeView = treeView;
         context.subscriptions.push(treeView);
         context.subscriptions.push(
             treeView.onDidChangeSelection((e) => {
                 const picked = e.selection[0];
-                provider.focusedSessionId =
-                    picked !== undefined && "sessionId" in picked
-                        ? picked.sessionId
+                provider.focusedRuntimeSessionId =
+                    picked !== undefined && "runtimeSessionId" in picked
+                        ? picked.runtimeSessionId
                         : null;
             }),
         );
+        context.subscriptions.push(
+            treeView.onDidChangeVisibility((e) => {
+                if (e.visible) {
+                    void provider.refreshFromAgent();
+                }
+            }),
+        );
+
+        provider.updateAgentMessage();
+        void provider.refreshFromAgent();
 
         const sessionsDir = resolveSessionsDirectoryUri(context);
         const watcher = workspace.createFileSystemWatcher(
@@ -121,17 +153,21 @@ export class AcpUiSessionsViewProvider
 
         registerCommandIB(
             cmdRefreshAcpUiSessions,
-            () => {
-                void refreshAcpUiSessionsFromDisk().then(() =>
-                    provider.refresh(),
-                );
-            },
+            () => void provider.refreshFromAgent(),
+            context,
+        );
+        registerCommandIB(
+            cmdSelectActiveAgent,
+            () => void provider.selectActiveAgent(),
             context,
         );
         registerCommandIB(
             cmdOpenAcpUiSession,
             (...args: unknown[]) =>
-                void provider.openSession(args[0] as string | undefined),
+                void provider.openSession(
+                    args[0] as string | undefined,
+                    args[1] as string | undefined,
+                ),
             context,
         );
         registerCommandIB(
@@ -163,6 +199,45 @@ export class AcpUiSessionsViewProvider
         this.changeEvent.fire(undefined);
     }
 
+    async refreshFromAgent(): Promise<void> {
+        await refreshAcpUiSessionsFromDisk();
+        const agent = getActiveAgentConfig();
+        if (agent === undefined) {
+            this.agentSessions = [];
+            this.agentListSupported = false;
+            this.updateAgentMessage();
+            this.refresh();
+            return;
+        }
+        const host = createDefaultAcpSessionHostRuntime(
+            getAcpUiExtensionActivation().rpcNdjsonSink,
+        );
+        const cwd = host.getWorkspaceRoot();
+        if (cwd === undefined) {
+            this.agentSessions = [];
+            this.agentListSupported = false;
+            this.updateAgentMessage();
+            this.refresh();
+            return;
+        }
+        try {
+            const result = await fetchAgentSessionsForWorkspace(agent, cwd);
+            this.agentListSupported = result.supported;
+            this.agentSessions = result.supported
+                ? sortSessionInfos(result.sessions)
+                : [];
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            getAcpUiExtensionActivation().outputChannel.appendLine(
+                `[ACP UI] session/list failed for "${agent.name}": ${message}`,
+            );
+            this.agentListSupported = false;
+            this.agentSessions = [];
+        }
+        this.updateAgentMessage();
+        this.refresh();
+    }
+
     getTreeItem(element: AcpUiSessionsTreeNode): TreeItem {
         return element;
     }
@@ -173,68 +248,168 @@ export class AcpUiSessionsViewProvider
         if (element) {
             return [];
         }
-        const rows = listAcpUiSessions();
-        if (rows.length === 0) {
-            return [new AcpUiPlaceholderTreeItem()];
+        const agent = getActiveAgentConfig();
+        if (agent === undefined) {
+            return [
+                new AcpUiPlaceholderTreeItem(
+                    "No ACP agents configured. Add entries to ib-acp-ui.agents in settings.",
+                ),
+            ];
         }
-        const active = getActiveAcpUiSessionId();
-        return rows.map((row) => this.toTreeItem(row, active));
+
+        if (this.agentListSupported) {
+            if (this.agentSessions.length === 0) {
+                return [
+                    new AcpUiPlaceholderTreeItem(
+                        "No chats yet. Use + to start a new chat.",
+                    ),
+                ];
+            }
+            const activeLocalId = getActiveAcpUiSessionId();
+            return this.agentSessions.map((row) => {
+                const local = findByRuntimeSessionId(agent.name, row.sessionId);
+                const isActive =
+                    local !== undefined && local.id === activeLocalId;
+                return new AcpUiSessionTreeItem(
+                    row.sessionId,
+                    sessionInfoLabel(row),
+                    isActive,
+                    agent.name,
+                    local?.id,
+                );
+            });
+        }
+
+        const localRows = listAcpUiSessionsForAgent(agent.name);
+        if (localRows.length === 0) {
+            return [
+                new AcpUiPlaceholderTreeItem(
+                    "No chats yet. Use + to start a new chat.",
+                ),
+            ];
+        }
+        const activeId = getActiveAcpUiSessionId();
+        return localRows.map((row) => {
+            const runtimeId = row.sessionId ?? row.id;
+            return new AcpUiSessionTreeItem(
+                runtimeId,
+                row.title,
+                row.id === activeId,
+                agent.name,
+                row.id,
+            );
+        });
     }
 
     getParent(): undefined {
         return undefined;
     }
 
-    private toTreeItem(
-        row: AcpUiSessionRecord,
-        activeId: string | null,
-    ): AcpUiSessionTreeItem {
-        return new AcpUiSessionTreeItem(row.id, row.title, row.id === activeId);
+    private updateAgentMessage(): void {
+        const agent = getActiveAgentConfig();
+        if (this.treeView === undefined) {
+            return;
+        }
+        this.treeView.message =
+            agent !== undefined ? `Agent: ${agent.name}` : undefined;
     }
 
-    private async openSession(sessionId?: string): Promise<void> {
-        if (typeof sessionId !== "string" || sessionId.length === 0) {
-            window.showInformationMessage("Choose a chat from the Chats list");
-            return;
-        }
-        const row = listAcpUiSessions().find((s) => s.id === sessionId);
-        if (!row) {
-            window.showErrorMessage("That chat no longer exists");
-            this.refresh();
-            return;
-        }
-        setActiveAcpUiSessionId(sessionId);
-        this.refresh();
-        const agentConfig =
-            row.agentName !== undefined
-                ? getAcpAgentConfigByName(row.agentName)
-                : getAcpAgentConfigsFromSettings()[0];
-        if (agentConfig === undefined) {
-            window.showErrorMessage(
-                row.agentName !== undefined
-                    ? `Cannot open chat "${row.title}" because agent "${row.agentName}" is no longer configured. Re-add that agent or delete this chat.`
-                    : `Cannot open chat "${row.title}" because no ACP agents are configured.`,
+    private async selectActiveAgent(): Promise<void> {
+        const configs = getAcpAgentConfigsFromSettings();
+        if (configs.length === 0) {
+            void window.showInformationMessage(
+                "No ACP agents configured. Add entries to ib-acp-ui.agents in settings.",
             );
             return;
         }
-        touchAcpUiSession(sessionId);
+        const current = getActiveAgentConfig();
+        const picked = await window.showQuickPick(
+            configs.map((config) => ({
+                label: config.name,
+                picked: config.name === current?.name,
+            })),
+            {
+                placeHolder: "Select active ACP agent",
+            },
+        );
+        if (picked === undefined) {
+            return;
+        }
+        await setActiveAgentName(picked.label);
+        this.updateAgentMessage();
+        await this.refreshFromAgent();
+    }
+
+    private async openSession(
+        runtimeSessionId?: string,
+        agentName?: string,
+    ): Promise<void> {
+        if (
+            typeof runtimeSessionId !== "string" ||
+            runtimeSessionId.length === 0
+        ) {
+            window.showInformationMessage("Choose a chat from the Chats list");
+            return;
+        }
+        const agent = getActiveAgentConfig();
+        const resolvedAgentName = agentName ?? agent?.name;
+        if (resolvedAgentName === undefined || agent === undefined) {
+            window.showErrorMessage(
+                "Cannot open chat because no ACP agents are configured.",
+            );
+            return;
+        }
+
+        const listed = this.agentSessions.find(
+            (row) => row.sessionId === runtimeSessionId,
+        );
+        const title =
+            listed !== undefined
+                ? sessionInfoLabel(listed)
+                : (findByRuntimeSessionId(resolvedAgentName, runtimeSessionId)
+                      ?.title ?? "Chat");
+
+        const local = await ensureLocalSessionForAgentSession({
+            agentName: resolvedAgentName,
+            runtimeSessionId,
+            title,
+        });
+        setActiveAcpUiSessionId(local.id);
+        this.refresh();
+        touchAcpUiSession(local.id);
         await openOrRevealAcpUiEditor(
             this.extensionContext,
-            sessionId,
-            row.title,
-            agentConfig,
+            local.id,
+            local.title,
+            agent,
         );
     }
 
     private async deleteSession(
         item: AcpUiSessionsTreeNode | undefined,
     ): Promise<void> {
-        if (!item || !("sessionId" in item)) {
+        const resolved =
+            item !== undefined && "runtimeSessionId" in item ? item : undefined;
+        const runtimeSessionId =
+            resolved?.runtimeSessionId ?? this.focusedRuntimeSessionId;
+        const agentName = resolved?.agentName ?? getActiveAgentConfig()?.name;
+        if (
+            typeof runtimeSessionId !== "string" ||
+            runtimeSessionId.length === 0 ||
+            agentName === undefined
+        ) {
             window.showErrorMessage("Select a chat in the Chats list");
             return;
         }
-        const row = listAcpUiSessions().find((s) => s.id === item.sessionId);
-        const labelText = row?.title ?? "chat";
+
+        const listed = this.agentSessions.find(
+            (row) => row.sessionId === runtimeSessionId,
+        );
+        const local = findByRuntimeSessionId(agentName, runtimeSessionId);
+        const labelText =
+            listed !== undefined
+                ? sessionInfoLabel(listed)
+                : (local?.title ?? "chat");
         const answer = await window.showWarningMessage(
             `Delete chat "${labelText}"? This cannot be undone.`,
             { modal: true },
@@ -243,42 +418,61 @@ export class AcpUiSessionsViewProvider
         if (answer !== "Delete") {
             return;
         }
-        await disposeAcpUiEditorForSession(item.sessionId);
-        await removeAcpUiSession(item.sessionId);
-        this.refresh();
+
+        const agent = getActiveAgentConfig();
+        if (agent !== undefined && this.agentListSupported) {
+            try {
+                await deleteAgentSession(agent, runtimeSessionId);
+            } catch (err: unknown) {
+                const message =
+                    err instanceof Error ? err.message : String(err);
+                getAcpUiExtensionActivation().outputChannel.appendLine(
+                    `[ACP UI] session/delete failed for "${runtimeSessionId}": ${message}`,
+                );
+            }
+        }
+
+        if (local !== undefined) {
+            await disposeAcpUiEditorForSession(local.id);
+            await removeAcpUiSession(local.id);
+        }
+        await this.refreshFromAgent();
     }
 
     private async renameSession(
         item: AcpUiSessionsTreeNode | undefined,
     ): Promise<void> {
-        const resolvedSessionId =
-            item !== undefined && "sessionId" in item
-                ? item.sessionId
-                : (this.focusedSessionId ?? getActiveAcpUiSessionId());
+        const resolved =
+            item !== undefined && "runtimeSessionId" in item ? item : undefined;
+        const runtimeSessionId =
+            resolved?.runtimeSessionId ?? this.focusedRuntimeSessionId;
+        const agentName = resolved?.agentName ?? getActiveAgentConfig()?.name;
         if (
-            typeof resolvedSessionId !== "string" ||
-            resolvedSessionId.length === 0
+            typeof runtimeSessionId !== "string" ||
+            runtimeSessionId.length === 0 ||
+            agentName === undefined
         ) {
             window.showErrorMessage("Select a chat in the Chats list");
             return;
         }
-        const row = listAcpUiSessions().find((s) => s.id === resolvedSessionId);
-        if (!row) {
-            window.showErrorMessage("That chat no longer exists");
-            this.refresh();
+        const local = findByRuntimeSessionId(agentName, runtimeSessionId);
+        if (local === undefined) {
+            window.showErrorMessage(
+                "Open this chat before renaming it locally.",
+            );
             return;
         }
         const nextTitle = await window.showInputBox({
             title: "Rename chat",
             prompt: "Enter a new name for this chat",
-            value: row.title,
+            value: local.title,
             validateInput: (value) =>
                 value.trim().length === 0 ? "Name cannot be empty" : undefined,
         });
         if (nextTitle === undefined) {
             return;
         }
-        if (!(await renameAcpUiSessionTitle(resolvedSessionId, nextTitle))) {
+        if (!(await renameAcpUiSessionTitle(local.id, nextTitle))) {
             window.showErrorMessage("Rename failed");
             return;
         }

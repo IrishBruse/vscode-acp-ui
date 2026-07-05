@@ -46,6 +46,15 @@ export type AcpSessionHostRuntime = {
     getWorkspaceRoot: () => string | undefined;
 };
 
+export type AcpSessionBridgeHooks = {
+    onSessionInfoUpdate?: (update: acp.SessionInfoUpdate) => void;
+};
+
+export type AcpSessionConnectOptions = {
+    preferredModelId?: string;
+    runtimeSessionId?: string;
+};
+
 /**
  * Bridges a single chat session to an ACP agent process. Translates ACP session/update notifications
  * into host protocol messages and routes user prompts to the agent.
@@ -76,6 +85,7 @@ export class AcpSessionBridge {
         private readonly config: AcpAgentSpawnConfig,
         private readonly postToWebview: PostToWebview,
         host: AcpSessionHostRuntime,
+        private readonly hooks?: AcpSessionBridgeHooks,
     ) {
         this.agentProcess = new AcpAgentProcess({
             config,
@@ -464,29 +474,46 @@ export class AcpSessionBridge {
     }
 
     /**
-     * Starts the agent process and creates an ACP session. If `preferredModelId` is set and the
+     * Starts the agent process and creates or loads an ACP session. If `preferredModelId` is set and the
      * session advertises models, applies it before the first `sessionModels` message to the UI.
      */
-    async connect(preferredModelId?: string): Promise<void> {
+    async connect(options?: AcpSessionConnectOptions): Promise<void> {
         this.seedConfigOptionsBeforeConnect();
         const init = await this.agentProcess.start();
         await this.ensureAuthenticated(init);
-        const result = await this.newSessionWithAuthRetry(init);
-        this.acpSessionId = result.sessionId;
+        const runtimeSessionId = options?.runtimeSessionId?.trim();
+        const useLoad =
+            runtimeSessionId !== undefined &&
+            runtimeSessionId.length > 0 &&
+            this.agentProcess.supportsLoadSession();
+        let bootstrap: acp.NewSessionResponse | acp.LoadSessionResponse;
+        if (useLoad) {
+            bootstrap = await this.loadSessionWithAuthRetry(
+                init,
+                runtimeSessionId,
+            );
+            this.acpSessionId = runtimeSessionId;
+        } else {
+            const created = await this.newSessionWithAuthRetry(init);
+            bootstrap = created;
+            this.acpSessionId = created.sessionId;
+        }
+        const preferredModelId = options?.preferredModelId;
         if (
-            result.configOptions !== undefined &&
-            result.configOptions !== null
+            bootstrap.configOptions !== undefined &&
+            bootstrap.configOptions !== null
         ) {
-            this.applyConfigOptions(result.configOptions);
-        } else if (result.models) {
-            let state = result.models;
+            this.applyConfigOptions(bootstrap.configOptions);
+        } else if (bootstrap.models) {
+            let state = bootstrap.models;
             if (
                 preferredModelId !== undefined &&
-                preferredModelId !== state.currentModelId
+                preferredModelId !== state.currentModelId &&
+                this.acpSessionId !== null
             ) {
                 try {
                     await this.agentProcess.setSessionModel(
-                        result.sessionId,
+                        this.acpSessionId,
                         preferredModelId,
                     );
                     state = { ...state, currentModelId: preferredModelId };
@@ -498,9 +525,9 @@ export class AcpSessionBridge {
             this.postToWebview({ type: "sessionModels", ...selection });
         }
         if (
-            result.configOptions !== undefined &&
-            result.configOptions !== null &&
-            result.models &&
+            bootstrap.configOptions !== undefined &&
+            bootstrap.configOptions !== null &&
+            bootstrap.models &&
             preferredModelId !== undefined
         ) {
             const modelOption = this.lastConfigOptions?.options.find(
@@ -861,6 +888,21 @@ export class AcpSessionBridge {
         }
     }
 
+    private async loadSessionWithAuthRetry(
+        init: acp.InitializeResponse,
+        runtimeSessionId: string,
+    ): Promise<acp.LoadSessionResponse> {
+        try {
+            return await this.agentProcess.loadSession(runtimeSessionId);
+        } catch (err: unknown) {
+            if (!isAuthRequiredError(err)) {
+                throw err;
+            }
+            await this.ensureAuthenticated(init);
+            return await this.agentProcess.loadSession(runtimeSessionId);
+        }
+    }
+
     private async logoutBestEffort(): Promise<void> {
         if (!this.agentProcess.supportsLogout()) {
             return;
@@ -876,6 +918,9 @@ export class AcpSessionBridge {
     }
 
     private handleSessionUpdate(params: acp.SessionNotification): void {
+        if (params.update.sessionUpdate === "session_info_update") {
+            this.hooks?.onSessionInfoUpdate?.(params.update);
+        }
         const messages = sessionUpdateToWebviewMessages(
             params.update,
             this.toolCallKindTracking,

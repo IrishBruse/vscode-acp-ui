@@ -165,10 +165,10 @@
                 "category": "IrishBruse ACP"
             },
             {
-                "command": "ib-acp-ui.newAcpUiInEditorPickAgent",
-                "title": "New ACP UI Chat (Pick Agent)",
-                "shortTitle": "Pick Agent",
-                "icon": "$(chevron-down)",
+                "command": "ib-acp-ui.selectActiveAgent",
+                "title": "Select Active ACP Agent",
+                "shortTitle": "Agent",
+                "icon": "$(list-selection)",
                 "category": "IrishBruse ACP"
             },
             {
@@ -251,7 +251,7 @@
                     "group": "navigation"
                 },
                 {
-                    "command": "ib-acp-ui.newAcpUiInEditorPickAgent",
+                    "command": "ib-acp-ui.selectActiveAgent",
                     "when": "view == acpUiSessionsView",
                     "group": "navigation"
                 },
