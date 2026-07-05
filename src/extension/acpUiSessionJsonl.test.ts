@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     ACP_UI_SESSION_SCHEMA,
+    enqueueSessionFileWrite,
     isReplayableSessionEvent,
     parseSessionEventLines,
     parseSessionFile,
@@ -10,6 +11,32 @@ import {
     serializeSessionRecord,
     shouldPersistExtensionMessage,
 } from "./acpUiSessionJsonlFormat";
+
+describe("enqueueSessionFileWrite", () => {
+    it("runs operations for the same file in order", async () => {
+        const key = "/tmp/test-session.acp";
+        const order: number[] = [];
+        let releaseFirst: (() => void) | undefined;
+        const firstGate = new Promise<void>((resolve) => {
+            releaseFirst = resolve;
+        });
+        const first = enqueueSessionFileWrite(key, async () => {
+            order.push(1);
+            await firstGate;
+            order.push(2);
+        });
+        const second = enqueueSessionFileWrite(key, async () => {
+            order.push(3);
+        });
+        await new Promise<void>((resolve) => {
+            queueMicrotask(() => resolve());
+        });
+        expect(order).toEqual([1]);
+        releaseFirst?.();
+        await Promise.all([first, second]);
+        expect(order).toEqual([1, 2, 3]);
+    });
+});
 
 describe("serializeSessionRecord", () => {
     it("writes a debug comment line then pretty-printed JSON", () => {
@@ -179,6 +206,12 @@ describe("shouldPersistExtensionMessage", () => {
                 requestId: "1",
                 toolTitle: "tool",
                 options: [],
+            }),
+        ).toBe(false);
+        expect(
+            shouldPersistExtensionMessage({
+                type: "sessionHistoryLoading",
+                loading: true,
             }),
         ).toBe(false);
         expect(

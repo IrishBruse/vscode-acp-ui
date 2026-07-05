@@ -78,6 +78,8 @@ export type ChatState = {
     sessionConfigOptions: AcpUiSessionConfigOption[] | null;
     /** True while waiting for agent model/config options (uncached reconnect). */
     sessionConfigLoading: boolean;
+    /** True while ACP `session/load` is replaying conversation history. */
+    sessionHistoryLoading: boolean;
     acpAgentSelection: AcpAgentSelectionState | null;
     slashCommands: AcpUiSlashCommand[];
     permissionPrompt: PermissionPromptState | null;
@@ -187,6 +189,7 @@ export function createInitialChatState(): ChatState {
         modelSelection: null,
         sessionConfigOptions: null,
         sessionConfigLoading: true,
+        sessionHistoryLoading: false,
         acpAgentSelection: null,
         slashCommands: [],
         permissionPrompt: null,
@@ -509,6 +512,7 @@ function applySessionReset(state: ChatState): ChatState {
         sessionConfigOptions: null,
         modelSelection: null,
         sessionConfigLoading: true,
+        sessionHistoryLoading: false,
     };
 }
 
@@ -654,6 +658,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             return applySessionConfigOptions(state, action.options);
         case "sessionConfigOptionsLoading":
             return applySessionConfigOptionsLoading(state);
+        case "sessionHistoryLoading":
+            return { ...state, sessionHistoryLoading: action.loading };
         case "acpAgentSelection":
             return {
                 ...state,

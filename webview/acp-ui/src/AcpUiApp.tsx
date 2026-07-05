@@ -26,6 +26,11 @@ import {
   type TraceItem,
 } from "./chatReducer";
 import { ChatComposer } from "./components/ChatComposer";
+import { installSessionModeIndicatorThemeColors } from "./sessionModeIndicatorTheme";
+import {
+    installAgentMarkdownThemeColors,
+    updateAgentMarkdownThemeColors,
+} from "./agentMarkdownTheme";
 import {
   buildComposerAutocompleteState,
   wrapIndex,
@@ -39,6 +44,7 @@ import { CursorAskQuestionDialog } from "./components/CursorAskQuestionDialog";
 import { CursorCreatePlanDialog } from "./components/CursorCreatePlanDialog";
 import { PermissionDialog } from "./components/PermissionDialog";
 import { TraceList } from "./components/TraceList";
+import { SessionHistoryLoader } from "./components/SessionHistoryLoader";
 import {
   appendFileMentionsToDraft,
   collectPathsFromDataTransfer,
@@ -147,17 +153,19 @@ export function AcpUiApp({
   }, []);
 
   extensionDispatchRef.current = (message: ExtensionMessageAfterInit) => {
+    if (message.type === "vscodeThemeVariables") {
+      updateAgentMarkdownThemeColors(message.variables);
+      return;
+    }
     dispatch(message as ChatAction);
   };
 
   useLayoutEffect(() => {
-    if (init.vscodeThemeVariables === undefined) {
-      return;
-    }
-    for (const [key, value] of Object.entries(init.vscodeThemeVariables)) {
-      document.documentElement.style.setProperty(key, value);
-    }
+    const cleanup = installAgentMarkdownThemeColors(init.vscodeThemeVariables);
+    return cleanup;
   }, [init]);
+
+  useLayoutEffect(() => installSessionModeIndicatorThemeColors(), []);
 
   useLayoutEffect(() => {
     scrollTraceToBottomIfPinned();
@@ -580,6 +588,9 @@ export function AcpUiApp({
           onScroll={onTraceScroll}
         >
           <div ref={traceContentRef}>
+            {state.sessionHistoryLoading && state.trace.length === 0 ? (
+              <SessionHistoryLoader />
+            ) : null}
             <TraceList
               items={state.trace}
               showThoughts={showThinkingBlocks}
@@ -588,6 +599,9 @@ export function AcpUiApp({
                 setExpandAllToolOutputs(false);
               }}
             />
+            {state.sessionHistoryLoading && state.trace.length > 0 ? (
+              <SessionHistoryLoader inline />
+            ) : null}
           </div>
         </main>
         <div className="acp-ui-composer-stack">

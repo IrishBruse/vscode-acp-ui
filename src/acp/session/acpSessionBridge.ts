@@ -48,6 +48,8 @@ export type AcpSessionHostRuntime = {
 
 export type AcpSessionBridgeHooks = {
     onSessionInfoUpdate?: (update: acp.SessionInfoUpdate) => void;
+    /** Called immediately before `session/load` replays agent-side history. */
+    onResumeSession?: () => void | Promise<void>;
 };
 
 export type AcpSessionConnectOptions = {
@@ -488,6 +490,7 @@ export class AcpSessionBridge {
             this.agentProcess.supportsLoadSession();
         let bootstrap: acp.NewSessionResponse | acp.LoadSessionResponse;
         if (useLoad) {
+            await this.hooks?.onResumeSession?.();
             bootstrap = await this.loadSessionWithAuthRetry(
                 init,
                 runtimeSessionId,

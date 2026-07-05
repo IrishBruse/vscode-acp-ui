@@ -1,6 +1,6 @@
 import type { AcpUiSessionConfigOption } from "./sessionConfigOptions";
 
-export type SessionModeIndicatorTone = "ask" | "plan" | "debug";
+export type SessionModeIndicatorTone = "ask" | "plan";
 
 export type SessionModeIndicatorSpec =
     | {
@@ -18,10 +18,6 @@ function normalizedModeValue(modeValue: string): string {
     return modeValue.trim().toLowerCase();
 }
 
-/**
- * Maps an ACP session mode wire value to a colored composer label.
- * Default/agent modes render with no visible text.
- */
 export function resolveSessionModeIndicator(
     modeValue: string,
     choiceName?: string,
@@ -33,13 +29,24 @@ export function resolveSessionModeIndicator(
     if (normalized === "ask") {
         return { visible: true, label: choiceName ?? "Ask", tone: "ask" };
     }
-    if (normalized === "plan") {
+    if (normalized === "plan" || normalized === "architect") {
         return { visible: true, label: choiceName ?? "Plan", tone: "plan" };
     }
-    if (normalized === "debug") {
-        return { visible: true, label: choiceName ?? "Debug", tone: "debug" };
-    }
     return { visible: false };
+}
+
+/**
+ * Composer placeholder copy for the active session mode.
+ */
+export function resolveComposerPlaceholder(modeValue: string): string {
+    const normalized = normalizedModeValue(modeValue);
+    if (normalized === "ask") {
+        return "Ask the agent a question";
+    }
+    if (normalized === "plan" || normalized === "architect") {
+        return "Describe what you want the agent to plan";
+    }
+    return "Describe a task for the agent to do";
 }
 
 export function sessionModeIndicatorFromOption(

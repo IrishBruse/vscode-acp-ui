@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import {
     type ExtensionContext,
     FileType,
+    Range,
     type TextDocument,
     Uri,
     WorkspaceEdit,
@@ -14,6 +15,7 @@ import {
     type AcpUiSessionHeader,
     type AcpUiSessionRecordDebug,
     type AcpUiSessionReplayEvent,
+    enqueueSessionFileWrite,
     normalizePromptHistory,
     parseSessionFile,
     serializeSessionHeader,
@@ -27,6 +29,7 @@ export {
     type AcpUiSessionRecordDebug,
     type AcpUiSessionReplayEvent,
     type AcpUiSessionSubmitEvent,
+    enqueueSessionFileWrite,
     isReplayableSessionEvent,
     parseSessionEventLines,
     parseSessionEventLinesFromIndex,
@@ -148,14 +151,45 @@ async function applySessionFileEdit(
     apply: (edit: WorkspaceEdit, doc: TextDocument) => void,
     failureMessage: string,
 ): Promise<void> {
+    await enqueueSessionFileWrite(uri.toString(), async () => {
+        const doc = await workspace.openTextDocument(uri);
+        const edit = new WorkspaceEdit();
+        apply(edit, doc);
+        const applied = await workspace.applyEdit(edit);
+        if (!applied) {
+            throw new Error(failureMessage);
+        }
+        await doc.save();
+    });
+}
+
+/**
+ * Removes all replay events and RPC records, keeping only the session header.
+ */
+export async function clearSessionFileLog(
+    uri: Uri,
+): Promise<AcpUiSessionHeader | null> {
     const doc = await workspace.openTextDocument(uri);
-    const edit = new WorkspaceEdit();
-    apply(edit, doc);
-    const applied = await workspace.applyEdit(edit);
-    if (!applied) {
-        throw new Error(failureMessage);
+    const parsed = parseSessionFile(doc.getText());
+    if (parsed.header === null) {
+        return null;
     }
-    await doc.save();
+    const content = `${serializeSessionHeader(parsed.header)}\n`;
+    await enqueueSessionFileWrite(uri.toString(), async () => {
+        const latest = await workspace.openTextDocument(uri);
+        const edit = new WorkspaceEdit();
+        const fullRange = new Range(
+            latest.positionAt(0),
+            latest.positionAt(latest.getText().length),
+        );
+        edit.replace(uri, fullRange, content);
+        const applied = await workspace.applyEdit(edit);
+        if (!applied) {
+            throw new Error(`Failed to clear session log for ${uri.fsPath}`);
+        }
+        await latest.save();
+    });
+    return parsed.header;
 }
 
 /**

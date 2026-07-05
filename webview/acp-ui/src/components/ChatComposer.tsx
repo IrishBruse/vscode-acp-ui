@@ -27,7 +27,7 @@ import {
   configOptionsSummaryLabel,
 } from "../../../../src/acp/session/sessionConfigOptions";
 import type { AcpUiSessionConfigOption } from "../../../../src/acp/session/sessionConfigOptions";
-import { isSessionModeConfigOption } from "../../../../src/acp/session/sessionModeIndicator";
+import { isSessionModeConfigOption, resolveComposerPlaceholder } from "../../../../src/acp/session/sessionModeIndicator";
 import type { AcpUiSlashCommand } from "../../../../src/protocol/extensionHostMessages";
 import { buildComposerAutocompleteState, wrapIndex } from "./composerAutocomplete";
 import { ConfigOptionControls, ComposerConfigLoading } from "./ConfigOptionControls";
@@ -117,6 +117,10 @@ export function ChatComposer({
   const modeOption = useMemo(
     () => modeConfigOption(configState),
     [configState],
+  );
+  const composerPlaceholder = useMemo(
+    () => resolveComposerPlaceholder(modeOption?.currentValue ?? ""),
+    [modeOption],
   );
   const toolbarConfigOptions = useMemo(
     () =>
@@ -279,7 +283,7 @@ export function ChatComposer({
         <textarea
           ref={composerInputRef}
           className="composer-input"
-          placeholder="Describe a task for the agent to do..."
+          placeholder={composerPlaceholder}
           aria-label="Agent input"
           title="Enter to send. Shift+Enter for newline. Shift+Tab to cycle mode. Arrow up and down for prompt history."
           rows={2}

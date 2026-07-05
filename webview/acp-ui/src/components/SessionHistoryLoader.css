@@ -1,26 +1,37 @@
-.acp-ui-boot {
-    flex: 1;
+.session-history-loader {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 10px;
+    padding: 24px 16px;
     color: var(--vscode-descriptionForeground);
     font-size: 12px;
-    padding: 16px;
 }
 
-.acp-ui-boot__spinner {
+.session-history-loader--inline {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: 12px 0 4px;
+}
+
+.session-history-loader__spinner {
     width: 18px;
     height: 18px;
     border: 2px solid
         color-mix(in srgb, var(--vscode-descriptionForeground) 25%, transparent);
     border-top-color: var(--vscode-progressBar-background, var(--vscode-focusBorder));
     border-radius: 50%;
-    animation: acp-ui-boot-spin 0.75s linear infinite;
+    animation: session-history-loader-spin 0.75s linear infinite;
+    flex-shrink: 0;
 }
 
-@keyframes acp-ui-boot-spin {
+.session-history-loader--inline .session-history-loader__spinner {
+    width: 14px;
+    height: 14px;
+}
+
+@keyframes session-history-loader-spin {
     to {
         transform: rotate(360deg);
     }

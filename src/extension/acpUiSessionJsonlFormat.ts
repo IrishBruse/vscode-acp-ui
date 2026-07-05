@@ -6,6 +6,23 @@ export const ACP_UI_SESSION_FILE_SUFFIX = ".acp";
 /** Separator between debug fields on the `//` comment line above each record. */
 export const ACP_UI_SESSION_DEBUG_FIELD_SEPARATOR = " | ";
 
+/** Serializes all mutations to one session file so concurrent appends do not race. */
+const sessionFileWriteTails = new Map<string, Promise<unknown>>();
+
+/**
+ * Runs `operation` after prior writes to the same session file finish.
+ */
+export function enqueueSessionFileWrite<T>(
+    sessionFileKey: string,
+    operation: () => Promise<T>,
+): Promise<T> {
+    const prior =
+        sessionFileWriteTails.get(sessionFileKey) ?? Promise.resolve();
+    const next = prior.catch(() => undefined).then(() => operation());
+    sessionFileWriteTails.set(sessionFileKey, next);
+    return next as Promise<T>;
+}
+
 /**
  * Debug metadata shown on the `//` comment line above each JSON block.
  */
@@ -273,6 +290,8 @@ const ephemeralExtensionMessageTypes = new Set<string>([
     "cursorCreatePlanRequest",
     "error",
     "sessionConfigOptionsLoading",
+    "sessionHistoryLoading",
+    "vscodeThemeVariables",
 ]);
 
 function normalizePromptHistory(entries: unknown): string[] | undefined {

@@ -77,8 +77,11 @@ export class AcpUiSessionFileRpcSink implements AcpRpcNdjsonSink {
 
         try {
             await appendSessionRpcRecord(this.sessionFileUri, payload, debug);
-        } catch {
-            // Best-effort debug logging; never break the agent connection.
+        } catch (err: unknown) {
+            const detail = err instanceof Error ? err.message : String(err);
+            console.warn(
+                `[ACP UI] Failed to persist ACP RPC record: ${detail}`,
+            );
         }
     }
 }

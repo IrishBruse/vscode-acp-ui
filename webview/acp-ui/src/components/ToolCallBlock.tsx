@@ -142,10 +142,12 @@ export function ToolCallBlock({
     item,
     expandAllToolOutputs,
     onCollapseExpandAll,
+    className,
 }: {
     item: TraceToolItem;
     expandAllToolOutputs: boolean;
     onCollapseExpandAll?: () => void;
+    className?: string;
 }): ReactElement {
     const [localExpanded, setLocalExpanded] = useState(false);
     const prevExpandAllRef = useRef(expandAllToolOutputs);
@@ -222,7 +224,11 @@ export function ToolCallBlock({
 
     return (
         <div
-            className="tool-call-terminal"
+            className={
+                className === undefined || className.length === 0
+                    ? "tool-call-terminal"
+                    : `tool-call-terminal ${className}`
+            }
             data-tool-id={item.toolCallId}
             data-status={item.status}
             role="status"

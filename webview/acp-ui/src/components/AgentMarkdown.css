@@ -1,8 +1,11 @@
 .agent-markdown {
     font-family:
         var(--vscode-editor-font-family), ui-sans-serif, system-ui, sans-serif;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(
+        --acp-markdown-font-size,
+        var(--vscode-editor-font-size, 12px)
+    );
+    line-height: var(--acp-markdown-line-height, 1.5);
     color: var(--vscode-foreground);
 }
 
@@ -17,22 +20,47 @@
 .agent-markdown h1,
 .agent-markdown h2,
 .agent-markdown h3,
-.agent-markdown h4 {
+.agent-markdown h4,
+.agent-markdown h5,
+.agent-markdown h6 {
     margin: 0.85em 0 0.45em;
     font-weight: 600;
     line-height: 1.25;
-    color: var(--vscode-foreground);
 }
 
 .agent-markdown h1 {
-    font-size: 1.25em;
+    font-size: 2em;
+    color: var(
+        --acp-markdown-h1-foreground,
+        var(--vscode-foreground)
+    );
 }
 .agent-markdown h2 {
-    font-size: 1.12em;
+    font-size: 1.5em;
+    color: var(
+        --acp-markdown-h2-foreground,
+        var(--vscode-foreground)
+    );
 }
-.agent-markdown h3,
+.agent-markdown h3 {
+    font-size: 1.25em;
+    color: var(
+        --acp-markdown-h3-foreground,
+        var(--vscode-foreground)
+    );
+}
 .agent-markdown h4 {
-    font-size: 1.05em;
+    font-size: 1em;
+    color: var(
+        --acp-markdown-h4-foreground,
+        var(--vscode-foreground)
+    );
+}
+.agent-markdown h5 {
+    font-size: 0.875em;
+}
+.agent-markdown h6 {
+    font-size: 0.85em;
 }
 
 .agent-markdown ul,
@@ -56,15 +84,30 @@
 
 .agent-markdown code {
     font-family: var(--vscode-editor-font-family), ui-monospace, monospace;
-    font-size: 0.95em;
+    font-size: 1em;
+    line-height: 1.357em;
     padding: 0.1em 0.35em;
     border-radius: 3px;
-    background-color: color-mix(
-        in srgb,
-        var(--vscode-textCodeBlock-background) 85%,
-        transparent
+    background-color: transparent;
+    border: 1px solid
+        var(
+            --acp-markdown-inline-code-border,
+            var(
+                --vscode-textPreformat-border,
+                var(
+                    --vscode-markdown-extension-editor-codeSpan-border,
+                    color-mix(
+                        in srgb,
+                        var(--vscode-widget-border) 70%,
+                        transparent
+                    )
+                )
+            )
+        );
+    color: var(
+        --acp-markdown-inline-code-foreground,
+        var(--vscode-textPreformat-foreground, var(--vscode-editor-foreground))
     );
-    color: var(--vscode-editor-foreground);
 }
 
 .agent-markdown pre {
@@ -83,9 +126,11 @@
 .agent-markdown pre code {
     padding: 0;
     background: none;
+    border: none;
     border-radius: 0;
-    font-size: 11px;
+    font-size: 0.95em;
     line-height: 1.4;
+    color: var(--vscode-editor-foreground);
 }
 
 .agent-markdown .code-token-keyword {
@@ -119,7 +164,7 @@
     margin: 0.5em 0 0.75em;
     border-collapse: collapse;
     width: 100%;
-    font-size: 11px;
+    font-size: 0.95em;
 }
 
 .agent-markdown th,

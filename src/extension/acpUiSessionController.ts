@@ -21,6 +21,7 @@ import {
 } from "../acp/session/sessionConfigOptionsCache";
 import { formatPathWithTilde } from "../platform/pathDisplay";
 import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";
+import { resolveMarkdownThemeVariables } from "../platform/vscode/resolveMarkdownThemeVariables";
 import type {
     AcpUiHistoryReplayEvent,
     ExtensionToWebviewMessage,
@@ -33,6 +34,7 @@ import {
     type AcpUiSessionReplayEvent,
     type AcpUiSessionSubmitEvent,
     appendSessionEvent,
+    clearSessionFileLog,
     parseSessionFile,
     shouldPersistExtensionMessage,
     updateSessionHeader,
@@ -60,6 +62,9 @@ export class AcpUiSessionController {
     private readonly sessionId: string;
     private readonly documentUri: Uri;
     private bridge: AcpSessionBridge | undefined;
+    private bridgeConnectInFlight:
+        | Promise<AcpSessionBridge | undefined>
+        | undefined;
     private agentConfig: AcpAgentConfig | undefined;
     private pendingModelId: string | undefined;
     private replayedEventCount = 0;
@@ -99,6 +104,26 @@ export class AcpUiSessionController {
                 void this.handleWebviewMessage(message);
             }),
         );
+        this.disposables.push(
+            window.onDidChangeActiveColorTheme(() => {
+                void this.postMarkdownThemeVariables();
+            }),
+        );
+        this.disposables.push(
+            workspace.onDidChangeConfiguration((event) => {
+                if (
+                    event.affectsConfiguration("workbench.colorTheme") ||
+                    event.affectsConfiguration(
+                        "editor.tokenColorCustomizations",
+                    ) ||
+                    event.affectsConfiguration("editor.fontSize") ||
+                    event.affectsConfiguration("markdown.preview.fontSize") ||
+                    event.affectsConfiguration("markdown.preview.lineHeight")
+                ) {
+                    void this.postMarkdownThemeVariables();
+                }
+            }),
+        );
     }
 
     dispose(): void {
@@ -113,7 +138,11 @@ export class AcpUiSessionController {
         const parsed = parseSessionFile(this.options.document.getText());
         const initPayload = await this.buildInitPayload(header);
         this.post({ type: "init", ...initPayload });
-        if (parsed.events.length > 0) {
+        void this.postMarkdownThemeVariables();
+        const willResumeFromAgent =
+            header.runtimeSessionId !== undefined &&
+            header.runtimeSessionId.trim().length > 0;
+        if (parsed.events.length > 0 && !willResumeFromAgent) {
             this.post({
                 type: "historyReplay",
                 events: parsed.events as AcpUiHistoryReplayEvent[],
@@ -126,6 +155,14 @@ export class AcpUiSessionController {
             this.postSessionConfigSeedOrLoading();
         }
         void this.ensureBridgeConnected();
+    }
+
+    private async postMarkdownThemeVariables(): Promise<void> {
+        const variables = await resolveMarkdownThemeVariables();
+        if (Object.keys(variables).length === 0) {
+            return;
+        }
+        this.postLive({ type: "vscodeThemeVariables", variables });
     }
 
     private postSessionConfigSeedOrLoading(): void {
@@ -172,9 +209,13 @@ export class AcpUiSessionController {
             defaultAgent !== undefined
                 ? readCachedComposerSeed(defaultAgent.name)
                 : { configOptions: null, modelSelection: null };
+        const vscodeThemeVariables = await resolveMarkdownThemeVariables();
         return {
             sessionId: header.id,
             title: header.title,
+            ...(Object.keys(vscodeThemeVariables).length > 0
+                ? { vscodeThemeVariables }
+                : {}),
             workspaceLabel,
             agentVersionLabel,
             acpAgentName: defaultAgent?.name,
@@ -245,8 +286,11 @@ export class AcpUiSessionController {
                     AcpUiSessionSubmitEvent
                 >,
             );
-        } catch {
-            // Best-effort persistence; UI still works in memory.
+        } catch (err: unknown) {
+            const detail = err instanceof Error ? err.message : String(err);
+            console.warn(
+                `[ACP UI] Failed to persist session event (${message.type}): ${detail}`,
+            );
         } finally {
             this.documentReplayDepth -= 1;
         }
@@ -259,8 +303,9 @@ export class AcpUiSessionController {
                 type: "submit",
                 body,
             });
-        } catch {
-            // Best-effort.
+        } catch (err: unknown) {
+            const detail = err instanceof Error ? err.message : String(err);
+            console.warn(`[ACP UI] Failed to persist submit event: ${detail}`);
         } finally {
             this.documentReplayDepth -= 1;
         }
@@ -294,6 +339,18 @@ export class AcpUiSessionController {
         if (this.bridge !== undefined) {
             return this.bridge;
         }
+        if (this.bridgeConnectInFlight !== undefined) {
+            return this.bridgeConnectInFlight;
+        }
+        this.bridgeConnectInFlight = this.connectBridge();
+        try {
+            return await this.bridgeConnectInFlight;
+        } finally {
+            this.bridgeConnectInFlight = undefined;
+        }
+    }
+
+    private async connectBridge(): Promise<AcpSessionBridge | undefined> {
         const config = this.agentConfig ?? getAcpAgentConfigsFromSettings()[0];
         if (config === undefined) {
             this.post({
@@ -318,22 +375,23 @@ export class AcpUiSessionController {
                 onSessionInfoUpdate: (update) => {
                     void this.applySessionInfoUpdate(update);
                 },
+                onResumeSession: () => this.prepareSessionFileForResume(),
             },
         );
         this.bridge = bridge;
         const preferred = this.pendingModelId;
         this.pendingModelId = undefined;
+        const header = parseSessionFile(this.options.document.getText()).header;
+        const runtimeSessionId = header?.runtimeSessionId?.trim();
+        const mayResume =
+            runtimeSessionId !== undefined && runtimeSessionId.length > 0;
+        if (mayResume) {
+            this.postLive({ type: "sessionHistoryLoading", loading: true });
+        }
         try {
-            const header = parseSessionFile(
-                this.options.document.getText(),
-            ).header;
-            const runtimeSessionId = header?.runtimeSessionId;
             await bridge.connect({
                 preferredModelId: preferred,
-                ...(runtimeSessionId !== undefined &&
-                runtimeSessionId.length > 0
-                    ? { runtimeSessionId }
-                    : {}),
+                ...(mayResume ? { runtimeSessionId } : {}),
             });
             const connectedSessionId = bridge.sessionId;
             if (connectedSessionId !== null) {
@@ -354,6 +412,28 @@ export class AcpUiSessionController {
             bridge.dispose();
             this.bridge = undefined;
             return undefined;
+        } finally {
+            if (mayResume) {
+                this.postLive({
+                    type: "sessionHistoryLoading",
+                    loading: false,
+                });
+            }
+        }
+    }
+
+    private async prepareSessionFileForResume(): Promise<void> {
+        this.documentReplayDepth += 1;
+        try {
+            await clearSessionFileLog(this.documentUri);
+            this.replayedEventCount = 0;
+        } catch (err: unknown) {
+            const detail = err instanceof Error ? err.message : String(err);
+            console.warn(
+                `[ACP UI] Failed to clear session log before resume: ${detail}`,
+            );
+        } finally {
+            this.documentReplayDepth -= 1;
         }
     }
 

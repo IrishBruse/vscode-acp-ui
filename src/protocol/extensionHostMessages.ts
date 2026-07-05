@@ -118,6 +118,11 @@ export type ExtensionToWebviewMessage =
           sessionConfigOptionsSeed?: AcpUiSessionConfigOption[];
       }
     | {
+          /** Markdown heading and inline-code colors derived from the active theme. */
+          type: "vscodeThemeVariables";
+          variables: Record<string, string>;
+      }
+    | {
           type: "sessionModels";
           currentModelId: string;
           availableModels: AcpUiSessionModelSelection["availableModels"];
@@ -129,6 +134,11 @@ export type ExtensionToWebviewMessage =
     | {
           /** Clears composer model/config picks while the agent session reconnects. */
           type: "sessionConfigOptionsLoading";
+      }
+    | {
+          /** Shown while ACP `session/load` replays conversation history. */
+          type: "sessionHistoryLoading";
+          loading: boolean;
       }
     | {
           type: "acpAgentSelection";

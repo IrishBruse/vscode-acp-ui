@@ -11,9 +11,8 @@
 }
 
 .composer-mode-indicator--plan {
-    color: var(--vscode-charts-orange, var(--vscode-terminal-ansiYellow));
-}
-
-.composer-mode-indicator--debug {
-    color: var(--vscode-charts-red, var(--vscode-errorForeground));
+    color: var(
+        --acp-composer-plan-foreground,
+        var(--vscode-editorWarning-foreground, #d18616)
+    );
 }

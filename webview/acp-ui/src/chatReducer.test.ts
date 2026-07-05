@@ -223,6 +223,20 @@ describe("chatReducer", () => {
         );
     });
 
+    it("tracks sessionHistoryLoading during ACP resume", () => {
+        const loading = chatReducer(createInitialChatState(), {
+            type: "sessionHistoryLoading",
+            loading: true,
+        });
+        expect(loading.sessionHistoryLoading).toBe(true);
+
+        const done = chatReducer(loading, {
+            type: "sessionHistoryLoading",
+            loading: false,
+        });
+        expect(done.sessionHistoryLoading).toBe(false);
+    });
+
     it("seeds composer state from init cache without loading", () => {
         writeCachedSessionConfigOptions("cursor", [
             {

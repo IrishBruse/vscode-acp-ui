@@ -18,9 +18,17 @@
 
 .agent-response-stream {
     margin: 0 0 6px;
-    padding: 0 0 0 20px;
+    padding: 0;
     border: none;
     background: transparent;
+}
+
+.trace-segment-gap {
+    margin-top: 14px;
+}
+
+.agent-response-stream.trace-segment-gap {
+    padding-top: 2px;
 }
 
 .agent-response-markdown {

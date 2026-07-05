@@ -23,7 +23,12 @@ mount.className = "root agent-root";
 mount.replaceChildren();
 const bootLine = document.createElement("div");
 bootLine.className = "acp-ui-boot";
-bootLine.textContent = "Connecting…";
+const bootSpinner = document.createElement("div");
+bootSpinner.className = "acp-ui-boot__spinner";
+bootSpinner.setAttribute("aria-hidden", "true");
+const bootText = document.createElement("span");
+bootText.textContent = "Connecting...";
+bootLine.append(bootSpinner, bootText);
 mount.appendChild(bootLine);
 
 const host = createVsCodeAcpUiHost();

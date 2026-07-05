@@ -14,12 +14,21 @@ function durationLabel(durationMs: number | undefined): string {
 export function AgentThoughtBlock({
     text,
     durationMs,
+    className,
 }: {
     text: string;
     durationMs?: number;
+    className?: string;
 }): ReactElement {
     return (
-        <section className="agent-thought-chunk" aria-label="Agent thought">
+        <section
+            className={
+                className === undefined || className.length === 0
+                    ? "agent-thought-chunk"
+                    : `agent-thought-chunk ${className}`
+            }
+            aria-label="Agent thought"
+        >
             <div className="agent-thought-chunk-title">{durationLabel(durationMs)}</div>
             <pre className="agent-thought-chunk-body">{text}</pre>
         </section>

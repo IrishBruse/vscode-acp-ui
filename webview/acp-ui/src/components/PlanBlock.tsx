@@ -5,9 +5,22 @@ import type { PlanEntry } from "../../../../src/protocol/extensionHostMessages";
 /**
  * Renders an ACP agent plan as a titled list of status rows.
  */
-export function PlanBlock({ entries }: { entries: PlanEntry[] }): ReactElement {
+export function PlanBlock({
+    entries,
+    className,
+}: {
+    entries: PlanEntry[];
+    className?: string;
+}): ReactElement {
     return (
-        <div className="agent-plan" aria-label="Agent plan">
+        <div
+            className={
+                className === undefined || className.length === 0
+                    ? "agent-plan"
+                    : `agent-plan ${className}`
+            }
+            aria-label="Agent plan"
+        >
             <div className="agent-plan-title">Plan</div>
             {entries.map((e, i) => (
                 <div
