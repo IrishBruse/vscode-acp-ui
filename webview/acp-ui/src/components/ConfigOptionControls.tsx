@@ -12,6 +12,10 @@ function booleanSelectValue(currentValue: boolean): string {
     return currentValue ? "true" : "false";
 }
 
+function configFieldId(configId: string): string {
+    return `acp-ui-config-${configId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
 /**
  * Inline ACP session config dropdowns in agent order (Zed-style toolbar).
  */
@@ -27,53 +31,78 @@ export function ConfigOptionControls({
     return (
         <>
             {options.map((option) => {
+                const fieldId = configFieldId(option.configId);
                 if (option.type === "boolean") {
                     return (
-                        <select
+                        <div
                             key={option.configId}
-                            className="composer-config-select"
-                            aria-label={option.name}
-                            title={option.description ?? option.name}
-                            value={booleanSelectValue(option.currentValue)}
-                            disabled={disabled}
-                            onChange={(event) => {
-                                onPick(
-                                    option.configId,
-                                    event.target.value === "true",
-                                );
-                            }}
+                            className="composer-config-field"
                         >
-                            <option value="false">Off</option>
-                            <option value="true">On</option>
-                        </select>
+                            <label
+                                className="composer-config-label"
+                                htmlFor={fieldId}
+                                title={option.description ?? option.name}
+                            >
+                                {option.name}
+                            </label>
+                            <select
+                                id={fieldId}
+                                className="composer-config-select"
+                                aria-label={option.name}
+                                title={option.description ?? option.name}
+                                value={booleanSelectValue(option.currentValue)}
+                                disabled={disabled}
+                                onChange={(event) => {
+                                    onPick(
+                                        option.configId,
+                                        event.target.value === "true",
+                                    );
+                                }}
+                            >
+                                <option value="false">Off</option>
+                                <option value="true">On</option>
+                            </select>
+                        </div>
                     );
                 }
                 return (
-                    <select
+                    <div
                         key={option.configId}
-                        className={
-                            option.category === "model"
-                                ? "composer-config-select composer-config-select--model"
-                                : "composer-config-select"
-                        }
-                        aria-label={option.name}
-                        title={option.description ?? option.name}
-                        value={option.currentValue}
-                        disabled={disabled}
-                        onChange={(event) => {
-                            onPick(option.configId, event.target.value);
-                        }}
+                        className="composer-config-field"
                     >
-                        {option.options.map((choice) => (
-                            <option
-                                key={`${option.configId}:${choice.value}`}
-                                value={choice.value}
-                                title={choice.description}
-                            >
-                                {choice.name}
-                            </option>
-                        ))}
-                    </select>
+                        <label
+                            className="composer-config-label"
+                            htmlFor={fieldId}
+                            title={option.description ?? option.name}
+                        >
+                            {option.name}
+                        </label>
+                        <select
+                            id={fieldId}
+                            className={
+                                option.category === "model"
+                                    ? "composer-config-select composer-config-select--model"
+                                    : "composer-config-select"
+                            }
+                            aria-label={option.name}
+                            title={option.description ?? option.name}
+                            value={option.currentValue}
+                            disabled={disabled}
+                            onChange={(event) => {
+                                onPick(option.configId, event.target.value);
+                            }}
+                        >
+                            {option.options.map((choice) => (
+                                <option
+                                    key={`${option.configId}:${choice.value}`}
+                                    value={choice.value}
+                                    title={choice.description}
+                                >
+                                    {choice.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 );
             })}
         </>

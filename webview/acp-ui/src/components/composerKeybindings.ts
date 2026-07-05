@@ -13,6 +13,22 @@ export function shouldOpenNewChatOnCtrlT(args: {
     );
 }
 
+export function shouldCycleSessionModeOnShiftTab(args: {
+    key: string;
+    shiftKey: boolean;
+    ctrlKey: boolean;
+    metaKey: boolean;
+    altKey: boolean;
+}): boolean {
+    return (
+        args.key === "Tab" &&
+        args.shiftKey &&
+        !args.ctrlKey &&
+        !args.metaKey &&
+        !args.altKey
+    );
+}
+
 export function shouldCancelRunOnCtrlC(args: {
     key: string;
     ctrlKey: boolean;

@@ -16,6 +16,7 @@ import {
 import type { AcpUiSessionModelSelection } from "../../../../src/acp/session/sessionModels";
 import {
   groupedModelChoices,
+  modeConfigOption,
   modelConfigOption,
   modelParameterOptions,
   pickModelOptionForFamily,
@@ -26,9 +27,11 @@ import {
   configOptionsSummaryLabel,
 } from "../../../../src/acp/session/sessionConfigOptions";
 import type { AcpUiSessionConfigOption } from "../../../../src/acp/session/sessionConfigOptions";
+import { isSessionModeConfigOption } from "../../../../src/acp/session/sessionModeIndicator";
 import type { AcpUiSlashCommand } from "../../../../src/protocol/extensionHostMessages";
 import { buildComposerAutocompleteState, wrapIndex } from "./composerAutocomplete";
 import { ConfigOptionControls } from "./ConfigOptionControls";
+import { SessionModeIndicator } from "./SessionModeIndicator";
 
 export type ChatComposerProps = {
   activityLabel: string | null;
@@ -106,6 +109,19 @@ export function ChatComposer({
     () =>
       sessionConfigOptions !== null
         ? { options: sessionConfigOptions }
+        : null,
+    [sessionConfigOptions],
+  );
+  const modeOption = useMemo(
+    () => modeConfigOption(configState),
+    [configState],
+  );
+  const toolbarConfigOptions = useMemo(
+    () =>
+      sessionConfigOptions !== null
+        ? sessionConfigOptions.filter(
+            (option) => !isSessionModeConfigOption(option),
+          )
         : null,
     [sessionConfigOptions],
   );
@@ -262,7 +278,7 @@ export function ChatComposer({
           className="composer-input"
           placeholder="Describe a task for the agent to do..."
           aria-label="Agent input"
-          title="Enter to send. Shift+Enter for newline. Arrow up and down for prompt history."
+          title="Enter to send. Shift+Enter for newline. Shift+Tab to cycle mode. Arrow up and down for prompt history."
           rows={2}
           value={draft}
           disabled={textareaDisabled}
@@ -282,22 +298,20 @@ export function ChatComposer({
             <span className="composer-inline-label">Model</span>
           ) : null}
           {modelPickerLocked ? (
-            <>
-              <span
-                className="composer-pick-value"
-                title={modelLabel}
-                aria-label={
-                  agentOrderedLayout
-                    ? `Session config: ${modelLabel}`
-                    : `Model: ${modelLabel}`
-                }
-              >
-                {modelLabel.length > 0 ? modelLabel : "\u2014"}
-              </span>
-            </>
-          ) : agentOrderedLayout && sessionConfigOptions !== null ? (
+            <span
+              className="composer-pick-value"
+              title={modelLabel}
+              aria-label={
+                agentOrderedLayout
+                  ? `Session config: ${modelLabel}`
+                  : `Model: ${modelLabel}`
+              }
+            >
+              {modelLabel.length > 0 ? modelLabel : "\u2014"}
+            </span>
+          ) : agentOrderedLayout && toolbarConfigOptions !== null ? (
             <ConfigOptionControls
-              options={sessionConfigOptions}
+              options={toolbarConfigOptions}
               disabled={modelSelectDisabled}
               onPick={onPickSessionConfigOption}
             />
@@ -383,6 +397,9 @@ export function ChatComposer({
               ) : null}
             </>
           )}
+        </div>
+        <div className="composer-mode-slot">
+          <SessionModeIndicator modeOption={modeOption} />
         </div>
         <button
           type="button"

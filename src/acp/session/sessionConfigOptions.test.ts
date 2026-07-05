@@ -3,12 +3,15 @@ import {
     composeModelIdAfterDerivedChange,
     configOptionDisplayValue,
     configOptionsSummaryLabel,
+    cycleSessionModePick,
     deriveModelParamOptionsFromModelSelect,
     groupedModelChoices,
+    modeConfigOption,
     modelConfigOption,
     modelConfigSummaryLabel,
     modelParameterOptions,
     modelSelectOptionFromModels,
+    nextCycledConfigSelectValue,
     pickModelOptionForFamily,
     resolveAdvertisedModelOptionValue,
     resolveBestAdvertisedModelOption,
@@ -105,6 +108,75 @@ describe("usesAgentOrderedConfigLayout", () => {
     });
 });
 
+describe("modeConfigOption", () => {
+    const modeState = sessionConfigOptionsFromAgent([
+        {
+            id: "mode",
+            name: "Mode",
+            category: "mode",
+            type: "select",
+            currentValue: "ask",
+            options: [
+                { value: "ask", name: "Ask" },
+                { value: "agent", name: "Agent" },
+                { value: "plan", name: "Plan" },
+            ],
+        },
+    ]);
+
+    it("prefers category mode over other selects", () => {
+        expect(modeConfigOption(modeState)?.configId).toBe("mode");
+    });
+
+    it("cycles forward and wraps session mode values", () => {
+        const modeOption = modeConfigOption(modeState);
+        expect(modeOption).toBeDefined();
+        if (modeOption === undefined) {
+            return;
+        }
+        expect(nextCycledConfigSelectValue(modeOption)).toBe("agent");
+        expect(cycleSessionModePick(modeState)).toEqual({
+            configId: "mode",
+            value: "agent",
+        });
+        expect(
+            cycleSessionModePick(
+                sessionConfigOptionsFromAgent([
+                    {
+                        id: "mode",
+                        name: "Mode",
+                        category: "mode",
+                        type: "select",
+                        currentValue: "plan",
+                        options: [
+                            { value: "ask", name: "Ask" },
+                            { value: "agent", name: "Agent" },
+                            { value: "plan", name: "Plan" },
+                        ],
+                    },
+                ]),
+            ),
+        ).toEqual({ configId: "mode", value: "ask" });
+    });
+
+    it("returns null when only one mode is advertised", () => {
+        expect(
+            cycleSessionModePick(
+                sessionConfigOptionsFromAgent([
+                    {
+                        id: "mode",
+                        name: "Mode",
+                        category: "mode",
+                        type: "select",
+                        currentValue: "agent",
+                        options: [{ value: "agent", name: "Agent" }],
+                    },
+                ]),
+            ),
+        ).toBeNull();
+    });
+});
+
 describe("configOptionDisplayValue", () => {
     it("formats boolean and select values for toolbar labels", () => {
         expect(
@@ -148,7 +220,7 @@ describe("configOptionDisplayValue", () => {
                     options: [{ value: "claude-opus-4-8", name: "Opus 4.8" }],
                 },
             ]),
-        ).toBe("Agent \u00b7 Opus 4.8");
+        ).toBe("Opus 4.8");
     });
 });
 

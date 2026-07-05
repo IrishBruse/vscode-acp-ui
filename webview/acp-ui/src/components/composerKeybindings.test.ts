@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     shouldCancelRunOnCtrlC,
+    shouldCycleSessionModeOnShiftTab,
     shouldOpenNewChatOnCtrlT,
 } from "./composerKeybindings";
 
@@ -43,6 +44,41 @@ describe("shouldOpenNewChatOnCtrlT", () => {
                 metaKey: false,
                 altKey: false,
                 shiftKey: false,
+            }),
+        ).toBe(false);
+    });
+});
+
+describe("shouldCycleSessionModeOnShiftTab", () => {
+    it("matches shift+tab without other modifiers", () => {
+        expect(
+            shouldCycleSessionModeOnShiftTab({
+                key: "Tab",
+                shiftKey: true,
+                ctrlKey: false,
+                metaKey: false,
+                altKey: false,
+            }),
+        ).toBe(true);
+    });
+
+    it("ignores plain tab and ctrl+shift+tab", () => {
+        expect(
+            shouldCycleSessionModeOnShiftTab({
+                key: "Tab",
+                shiftKey: false,
+                ctrlKey: false,
+                metaKey: false,
+                altKey: false,
+            }),
+        ).toBe(false);
+        expect(
+            shouldCycleSessionModeOnShiftTab({
+                key: "Tab",
+                shiftKey: true,
+                ctrlKey: true,
+                metaKey: false,
+                altKey: false,
             }),
         ).toBe(false);
     });

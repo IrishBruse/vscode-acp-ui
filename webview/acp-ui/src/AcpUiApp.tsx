@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { cycleSessionModePick } from "../../../src/acp/session/sessionConfigOptions";
 import type { AcpUiSlashCommand } from "../../../src/protocol/extensionHostMessages";
 import {
   type ChatAction,
@@ -29,7 +30,11 @@ import {
   buildComposerAutocompleteState,
   wrapIndex,
 } from "./components/composerAutocomplete";
-import { shouldCancelRunOnCtrlC, shouldOpenNewChatOnCtrlT } from "./components/composerKeybindings";
+import {
+  shouldCancelRunOnCtrlC,
+  shouldCycleSessionModeOnShiftTab,
+  shouldOpenNewChatOnCtrlT,
+} from "./components/composerKeybindings";
 import { CursorAskQuestionDialog } from "./components/CursorAskQuestionDialog";
 import { CursorCreatePlanDialog } from "./components/CursorCreatePlanDialog";
 import { PermissionDialog } from "./components/PermissionDialog";
@@ -356,6 +361,33 @@ export function AcpUiApp({
     const autocompleteActive =
       autocomplete !== null && !composerAutocompleteDismissed;
     const hasSelection = start !== end;
+
+    if (
+      shouldCycleSessionModeOnShiftTab({
+        key: event.key,
+        shiftKey: event.shiftKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+      }) &&
+      !state.composerPicksLocked
+    ) {
+      const pick = cycleSessionModePick(
+        state.sessionConfigOptions !== null
+          ? { options: state.sessionConfigOptions }
+          : null,
+      );
+      if (pick !== null) {
+        event.preventDefault();
+        dispatch({
+          type: "pickSessionConfigOption",
+          configId: pick.configId,
+          value: pick.value,
+        });
+        postSetSessionConfigOption(pick.configId, pick.value);
+        return;
+      }
+    }
 
     if (
       shouldCancelRunOnCtrlC({

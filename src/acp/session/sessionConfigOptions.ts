@@ -4,6 +4,7 @@ import {
     formatModelDisplayName,
     parseModelIdBracketParams,
 } from "./modelVariantPicker";
+import { isSessionModeConfigOption } from "./sessionModeIndicator";
 import type { AcpUiSessionModelSelection } from "./sessionModels";
 
 export type AcpUiConfigSelectChoice = {
@@ -449,6 +450,54 @@ export function modelConfigOption(
     return option?.type === "select" ? option : undefined;
 }
 
+export function modeConfigOption(
+    state: AcpUiSessionConfigState | null,
+): Extract<AcpUiSessionConfigOption, { type: "select" }> | undefined {
+    const byCategory = state?.options.find(
+        (row) => row.type === "select" && row.category === "mode",
+    );
+    if (byCategory?.type === "select") {
+        return byCategory;
+    }
+    const byId = state?.options.find(
+        (row) => row.type === "select" && row.configId === "mode",
+    );
+    return byId?.type === "select" ? byId : undefined;
+}
+
+/**
+ * Next value when cycling a select config option forward (wraps at the end).
+ */
+export function nextCycledConfigSelectValue(
+    option: Extract<AcpUiSessionConfigOption, { type: "select" }>,
+): string | null {
+    if (option.options.length <= 1) {
+        return null;
+    }
+    const currentIndex = option.options.findIndex(
+        (choice) => choice.value === option.currentValue,
+    );
+    const nextIndex =
+        currentIndex === -1 ? 0 : (currentIndex + 1) % option.options.length;
+    const nextChoice = option.options[nextIndex];
+    return nextChoice?.value ?? null;
+}
+
+/** Resolves the next session mode for Shift+Tab cycling, if one is advertised. */
+export function cycleSessionModePick(
+    state: AcpUiSessionConfigState | null,
+): { configId: string; value: string } | null {
+    const modeOption = modeConfigOption(state);
+    if (modeOption === undefined) {
+        return null;
+    }
+    const nextValue = nextCycledConfigSelectValue(modeOption);
+    if (nextValue === null) {
+        return null;
+    }
+    return { configId: modeOption.configId, value: nextValue };
+}
+
 /**
  * True when the agent advertises separate config options (mode, model_config, etc.)
  * instead of encoding all tuning in bracketed model ids. Matches Zed's layout.
@@ -497,6 +546,7 @@ export function configOptionsSummaryLabel(
     options: ReadonlyArray<AcpUiSessionConfigOption>,
 ): string {
     const parts = options
+        .filter((option) => !isSessionModeConfigOption(option))
         .map((option) => configOptionDisplayValue(option))
         .filter((label) => label.length > 0);
     return parts.length > 0 ? parts.join(" \u00b7 ") : "\u2014";

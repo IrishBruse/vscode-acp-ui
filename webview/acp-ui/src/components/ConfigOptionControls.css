@@ -1,3 +1,21 @@
+.composer-config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+.composer-config-label {
+    font-size: 9px;
+    line-height: 1;
+    color: var(--vscode-descriptionForeground);
+    text-transform: lowercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .composer-config-select {
     flex: 0 0 auto;
     width: auto;
@@ -20,6 +38,7 @@
 }
 
 .composer-footer-config {
+    align-items: flex-end;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: thin;

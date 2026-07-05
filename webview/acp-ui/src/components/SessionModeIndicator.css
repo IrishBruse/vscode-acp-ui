@@ -1,0 +1,19 @@
+.composer-mode-indicator {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    user-select: none;
+}
+
+.composer-mode-indicator--ask {
+    color: var(--vscode-charts-green, var(--vscode-terminal-ansiGreen));
+}
+
+.composer-mode-indicator--plan {
+    color: var(--vscode-charts-orange, var(--vscode-terminal-ansiYellow));
+}
+
+.composer-mode-indicator--debug {
+    color: var(--vscode-charts-red, var(--vscode-errorForeground));
+}
