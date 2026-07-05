@@ -119,7 +119,7 @@
         ],
         "configurationDefaults": {
             "files.associations": {
-                "*.acp": "jsonl"
+                "*.acp": "jsonc"
             },
             "files.readonlyInclude": {
                 "**/*.acp": true

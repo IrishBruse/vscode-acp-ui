@@ -1,6 +1,9 @@
 import { createWriteStream, type WriteStream } from "node:fs";
 import type { OutputChannel } from "vscode";
-import type { AcpRpcNdjsonSink } from "../../acp/ports/rpcNdjsonSink";
+import type {
+    AcpRpcNdjsonLineContext,
+    AcpRpcNdjsonSink,
+} from "../../acp/ports/rpcNdjsonSink";
 
 /**
  * VS Code Output channel + append-only NDJSON log file. Replaces module-level singletons
@@ -18,7 +21,10 @@ export class VscodeAcpRpcNdjsonSink implements AcpRpcNdjsonSink {
         return this.channel !== null || this.logFilePath !== null;
     }
 
-    appendRawNdjsonLine(line: string): void {
+    appendRawNdjsonLine(
+        line: string,
+        _context?: AcpRpcNdjsonLineContext,
+    ): void {
         if (this.channel !== null) {
             this.channel.appendLine(line);
         }

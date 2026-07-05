@@ -3,6 +3,243 @@ import type { ExtensionToWebviewMessage } from "../protocol/extensionHostMessage
 export const ACP_UI_SESSION_SCHEMA = "acpUi/session/1" as const;
 export const ACP_UI_SESSION_FILE_SUFFIX = ".acp";
 
+/** Separator between debug fields on the `//` comment line above each record. */
+export const ACP_UI_SESSION_DEBUG_FIELD_SEPARATOR = " | ";
+
+/**
+ * Debug metadata shown on the `//` comment line above each JSON block.
+ */
+export type AcpUiSessionRecordDebug = {
+    record?: "header" | "event" | "rpc";
+    type?: string;
+    method?: string;
+    durationMs?: number;
+    direction?: "toAgent" | "fromAgent";
+};
+
+/**
+ * Builds the pipe-separated debug line shown above each JSON block.
+ */
+export function formatSessionRecordDebug(
+    debug: AcpUiSessionRecordDebug,
+): string {
+    const parts: string[] = [];
+    if (debug.method !== undefined) {
+        parts.push(debug.method);
+    } else if (debug.record === "header") {
+        parts.push("session header");
+    } else if (debug.record === "event" && debug.type !== undefined) {
+        parts.push(`event ${debug.type}`);
+    } else if (debug.record === "rpc") {
+        parts.push("rpc");
+    }
+    if (debug.durationMs !== undefined) {
+        parts.push(`${debug.durationMs}ms`);
+    }
+    if (debug.direction !== undefined) {
+        parts.push(debug.direction === "toAgent" ? "to agent" : "from agent");
+    }
+    if (parts.length === 0) {
+        parts.push("record");
+    }
+    return parts.join(ACP_UI_SESSION_DEBUG_FIELD_SEPARATOR);
+}
+
+/**
+ * Serializes a value as a `//` debug comment line plus indented JSON.
+ */
+export function serializeSessionRecord(
+    value: unknown,
+    debug: AcpUiSessionRecordDebug = {},
+): string {
+    const debugText = formatSessionRecordDebug(debug);
+    const pretty = JSON.stringify(value, null, 2);
+    return `// ${debugText}\n${pretty}\n`;
+}
+
+/**
+ * Parses one session file record starting at `lineIndex`.
+ * Supports legacy single-line JSON, legacy per-line comment prefixes, and
+ * comment-line + pretty JSON blocks.
+ */
+export function parseSessionRecordAtLine(
+    lines: string[],
+    lineIndex: number,
+): { value: unknown; consumedLines: number } | null {
+    let index = lineIndex;
+    while (index < lines.length && lines[index]?.trim() === "") {
+        index += 1;
+    }
+    if (index >= lines.length) {
+        return null;
+    }
+
+    const first = lines[index]?.trim() ?? "";
+    if (first.startsWith("{") || first.startsWith("[")) {
+        try {
+            return {
+                value: JSON.parse(first),
+                consumedLines: index - lineIndex + 1,
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    if (!first.startsWith("// ")) {
+        return null;
+    }
+
+    const legacyPerLine = parseLegacyPerLineCommentRecord(lines, index);
+    if (legacyPerLine !== null) {
+        return legacyPerLine;
+    }
+
+    let cursor = index + 1;
+    while (cursor < lines.length && lines[cursor]?.trim() === "") {
+        cursor += 1;
+    }
+
+    const jsonParts: string[] = [];
+    let depth = 0;
+    let started = false;
+    while (cursor < lines.length) {
+        const trimmed = lines[cursor]?.trim() ?? "";
+        if (trimmed.length === 0) {
+            if (!started) {
+                cursor += 1;
+                continue;
+            }
+            break;
+        }
+        if (trimmed.startsWith("// ")) {
+            break;
+        }
+        started = true;
+        jsonParts.push(lines[cursor] ?? "");
+        for (const ch of trimmed) {
+            if (ch === "{" || ch === "[") {
+                depth += 1;
+            } else if (ch === "}" || ch === "]") {
+                depth -= 1;
+            }
+        }
+        cursor += 1;
+        if (depth <= 0 && started) {
+            break;
+        }
+    }
+
+    if (jsonParts.length === 0) {
+        return null;
+    }
+    try {
+        return {
+            value: JSON.parse(jsonParts.join("\n")),
+            consumedLines: cursor - lineIndex,
+        };
+    } catch {
+        return null;
+    }
+}
+
+function parseLegacyPerLineCommentRecord(
+    lines: string[],
+    lineIndex: number,
+): { value: unknown; consumedLines: number } | null {
+    const separator = ` ${ACP_UI_SESSION_DEBUG_FIELD_SEPARATOR}`;
+    const first = lines[lineIndex]?.trim() ?? "";
+    const rest = first.slice(3);
+    const sepIdx = rest.indexOf(separator);
+    if (sepIdx === -1) {
+        return null;
+    }
+    const jsonFragment = rest.slice(sepIdx + separator.length);
+    if (!jsonFragment.startsWith("{") && !jsonFragment.startsWith("[")) {
+        return null;
+    }
+
+    const jsonParts: string[] = [];
+    let depth = 0;
+    let cursor = lineIndex;
+    while (cursor < lines.length) {
+        const trimmed = lines[cursor]?.trim() ?? "";
+        if (!trimmed.startsWith("// ")) {
+            break;
+        }
+        const lineRest = trimmed.slice(3);
+        const lineSepIdx = lineRest.indexOf(separator);
+        if (lineSepIdx === -1) {
+            break;
+        }
+        const fragment = lineRest.slice(lineSepIdx + separator.length);
+        jsonParts.push(fragment);
+        for (const ch of fragment) {
+            if (ch === "{" || ch === "[") {
+                depth += 1;
+            } else if (ch === "}" || ch === "]") {
+                depth -= 1;
+            }
+        }
+        cursor += 1;
+        if (depth <= 0 && jsonParts.length > 0) {
+            break;
+        }
+    }
+
+    if (jsonParts.length === 0) {
+        return null;
+    }
+    try {
+        return {
+            value: JSON.parse(jsonParts.join("\n")),
+            consumedLines: cursor - lineIndex,
+        };
+    } catch {
+        return null;
+    }
+}
+
+function headerFromParsedValue(value: unknown): AcpUiSessionHeader | null {
+    if (value === null || typeof value !== "object") {
+        return null;
+    }
+    const row = value as Record<string, unknown>;
+    if (
+        row.schema !== ACP_UI_SESSION_SCHEMA ||
+        typeof row.id !== "string" ||
+        row.id.length === 0 ||
+        typeof row.title !== "string" ||
+        row.title.trim().length === 0 ||
+        typeof row.createdAt !== "number" ||
+        !Number.isFinite(row.createdAt) ||
+        typeof row.updatedAt !== "number" ||
+        !Number.isFinite(row.updatedAt)
+    ) {
+        return null;
+    }
+    const agentName =
+        typeof row.agentName === "string" && row.agentName.length > 0
+            ? row.agentName
+            : undefined;
+    const runtimeSessionId =
+        typeof row.runtimeSessionId === "string" &&
+        row.runtimeSessionId.length > 0
+            ? row.runtimeSessionId
+            : undefined;
+    const promptHistory = normalizePromptHistory(row.promptHistory);
+    return {
+        schema: ACP_UI_SESSION_SCHEMA,
+        id: row.id,
+        title: row.title.trim(),
+        ...(agentName !== undefined ? { agentName } : {}),
+        ...(runtimeSessionId !== undefined ? { runtimeSessionId } : {}),
+        ...(promptHistory !== undefined ? { promptHistory } : {}),
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+    };
+}
+
 /**
  * First-line metadata for a chat session file.
  */
@@ -87,7 +324,7 @@ export function isReplayableSessionEvent(
 }
 
 /**
- * Parses the session header from line 1 of a JSONL file.
+ * Parses the session header from line 1 of a session file (legacy or pretty JSON).
  */
 export function parseSessionHeaderLine(
     line: string,
@@ -96,56 +333,43 @@ export function parseSessionHeaderLine(
     if (trimmed.length === 0) {
         return null;
     }
+    if (trimmed.startsWith("// ")) {
+        return null;
+    }
     let parsed: unknown;
     try {
         parsed = JSON.parse(trimmed);
     } catch {
         return null;
     }
-    if (parsed === null || typeof parsed !== "object") {
-        return null;
-    }
-    const row = parsed as Record<string, unknown>;
-    if (
-        row.schema !== ACP_UI_SESSION_SCHEMA ||
-        typeof row.id !== "string" ||
-        row.id.length === 0 ||
-        typeof row.title !== "string" ||
-        row.title.trim().length === 0 ||
-        typeof row.createdAt !== "number" ||
-        !Number.isFinite(row.createdAt) ||
-        typeof row.updatedAt !== "number" ||
-        !Number.isFinite(row.updatedAt)
-    ) {
-        return null;
-    }
-    const agentName =
-        typeof row.agentName === "string" && row.agentName.length > 0
-            ? row.agentName
-            : undefined;
-    const runtimeSessionId =
-        typeof row.runtimeSessionId === "string" &&
-        row.runtimeSessionId.length > 0
-            ? row.runtimeSessionId
-            : undefined;
-    const promptHistory = normalizePromptHistory(row.promptHistory);
-    return {
-        schema: ACP_UI_SESSION_SCHEMA,
-        id: row.id,
-        title: row.title.trim(),
-        ...(agentName !== undefined ? { agentName } : {}),
-        ...(runtimeSessionId !== undefined ? { runtimeSessionId } : {}),
-        ...(promptHistory !== undefined ? { promptHistory } : {}),
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
-    };
+    return headerFromParsedValue(parsed);
 }
 
 /**
- * Serializes a session header as a single JSON line (no trailing newline).
+ * Serializes a session header as a `//` debug line plus pretty JSON.
  */
 export function serializeSessionHeader(header: AcpUiSessionHeader): string {
-    return JSON.stringify(header);
+    return serializeSessionRecord(header, { record: "header" });
+}
+
+function parseSessionReplayEventsFromLines(
+    lines: string[],
+    startLineIndex: number,
+): AcpUiSessionReplayEvent[] {
+    const out: AcpUiSessionReplayEvent[] = [];
+    let index = startLineIndex;
+    while (index < lines.length) {
+        const record = parseSessionRecordAtLine(lines, index);
+        if (record === null) {
+            index += 1;
+            continue;
+        }
+        if (isReplayableSessionEvent(record.value)) {
+            out.push(record.value);
+        }
+        index += record.consumedLines;
+    }
+    return out;
 }
 
 /**
@@ -154,27 +378,11 @@ export function serializeSessionHeader(header: AcpUiSessionHeader): string {
 export function parseSessionEventLines(
     lines: string[],
 ): AcpUiSessionReplayEvent[] {
-    const out: AcpUiSessionReplayEvent[] = [];
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.length === 0) {
-            continue;
-        }
-        let parsed: unknown;
-        try {
-            parsed = JSON.parse(trimmed);
-        } catch {
-            continue;
-        }
-        if (isReplayableSessionEvent(parsed)) {
-            out.push(parsed);
-        }
-    }
-    return out;
+    return parseSessionReplayEventsFromLines(lines, 0);
 }
 
 /**
- * Parses a full session JSONL document into header + replay events.
+ * Parses a full session file into header + replay events.
  */
 export function parseSessionFile(text: string): {
     header: AcpUiSessionHeader | null;
@@ -184,13 +392,22 @@ export function parseSessionFile(text: string): {
     if (lines.length === 0) {
         return { header: null, events: [] };
     }
-    const header = parseSessionHeaderLine(lines[0] ?? "");
-    const events = parseSessionEventLines(lines.slice(1));
+
+    const headerRecord = parseSessionRecordAtLine(lines, 0);
+    if (headerRecord === null) {
+        return { header: null, events: [] };
+    }
+    const header = headerFromParsedValue(headerRecord.value);
+    const events = parseSessionReplayEventsFromLines(
+        lines,
+        headerRecord.consumedLines,
+    );
     return { header, events };
 }
 
 /**
- * Parses only new event lines starting at `fromLineIndex` (0 = header line).
+ * Parses only new replay events starting at `fromLineIndex` (0 = header line).
+ * Prefer {@link parseSessionFile} and slice by event count when possible.
  */
 export function parseSessionEventLinesFromIndex(
     text: string,
@@ -198,9 +415,11 @@ export function parseSessionEventLinesFromIndex(
 ): AcpUiSessionReplayEvent[] {
     const lines = text.split(/\r?\n/);
     if (fromLineIndex < 1) {
-        return parseSessionEventLines(lines.slice(1));
+        const headerRecord = parseSessionRecordAtLine(lines, 0);
+        const start = headerRecord !== null ? headerRecord.consumedLines : 1;
+        return parseSessionReplayEventsFromLines(lines, start);
     }
-    return parseSessionEventLines(lines.slice(fromLineIndex));
+    return parseSessionReplayEventsFromLines(lines, fromLineIndex);
 }
 
 export { normalizePromptHistory };

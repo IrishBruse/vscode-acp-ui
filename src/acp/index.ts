@@ -32,7 +32,10 @@ export {
 export { computeToolCallDiffRows } from "./mapping/toolCallDiffLines";
 export type { AcpHostFilesystem } from "./ports/hostFilesystem";
 export type { AcpRpcNdjsonSink } from "./ports/rpcNdjsonSink";
-export { NullAcpRpcNdjsonSink } from "./ports/rpcNdjsonSink";
+export {
+    CompositeAcpRpcNdjsonSink,
+    NullAcpRpcNdjsonSink,
+} from "./ports/rpcNdjsonSink";
 export {
     AcpSessionBridge,
     type AcpSessionHostRuntime,

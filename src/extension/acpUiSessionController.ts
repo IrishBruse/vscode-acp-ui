@@ -13,6 +13,7 @@ import {
     getAcpAgentConfigByName,
     getAcpAgentConfigsFromSettings,
 } from "../acp/config/vscodeSettingsAgents";
+import { CompositeAcpRpcNdjsonSink } from "../acp/ports/rpcNdjsonSink";
 import { AcpSessionBridge } from "../acp/session/acpSessionBridge";
 import { formatPathWithTilde } from "../platform/pathDisplay";
 import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";
@@ -22,12 +23,12 @@ import type {
 } from "../protocol/extensionHostMessages";
 import { tryParseWebviewMessage } from "../protocol/extensionHostMessages";
 import { setAcpUiCustomEditorTabTitle } from "./acpUiCustomEditorProvider";
+import { AcpUiSessionFileRpcSink } from "./acpUiSessionFileRpcSink";
 import {
     type AcpUiSessionHeader,
     type AcpUiSessionReplayEvent,
     type AcpUiSessionSubmitEvent,
     appendSessionEvent,
-    parseSessionEventLinesFromIndex,
     parseSessionFile,
     shouldPersistExtensionMessage,
     updateSessionHeader,
@@ -57,7 +58,7 @@ export class AcpUiSessionController {
     private bridge: AcpSessionBridge | undefined;
     private agentConfig: AcpAgentConfig | undefined;
     private pendingModelId: string | undefined;
-    private replayedLineCount = 1;
+    private replayedEventCount = 0;
     private documentReplayDepth = 0;
     private readonly disposables: Array<{ dispose(): void }> = [];
 
@@ -74,10 +75,7 @@ export class AcpUiSessionController {
             named !== undefined
                 ? (getAcpAgentConfigByName(named) ?? configs[0])
                 : configs[0];
-        this.replayedLineCount = Math.max(
-            1,
-            options.document.getText().split(/\r?\n/).length,
-        );
+        this.replayedEventCount = parsed.events.length;
     }
 
     activate(): void {
@@ -160,22 +158,20 @@ export class AcpUiSessionController {
     }
 
     private replayDocumentDelta(document: TextDocument): void {
-        const lineCount = document.lineCount;
-        if (lineCount <= this.replayedLineCount) {
-            if (lineCount < this.replayedLineCount) {
-                this.replayedLineCount = lineCount;
+        const parsed = parseSessionFile(document.getText());
+        const events = parsed.events;
+        if (events.length <= this.replayedEventCount) {
+            if (events.length < this.replayedEventCount) {
+                this.replayedEventCount = events.length;
             }
             return;
         }
-        const events = parseSessionEventLinesFromIndex(
-            document.getText(),
-            this.replayedLineCount,
-        );
-        this.replayedLineCount = lineCount;
+        const delta = events.slice(this.replayedEventCount);
+        this.replayedEventCount = events.length;
         if (this.documentReplayDepth > 0) {
             return;
         }
-        for (const event of events) {
+        for (const event of delta) {
             if (event.type === "submit") {
                 continue;
             }
@@ -254,7 +250,12 @@ export class AcpUiSessionController {
             return undefined;
         }
         const { rpcNdjsonSink } = getAcpUiExtensionActivation();
-        const host = createDefaultAcpSessionHostRuntime(rpcNdjsonSink);
+        const sessionRpcSink = new AcpUiSessionFileRpcSink(this.documentUri);
+        const compositeRpcSink = new CompositeAcpRpcNdjsonSink([
+            rpcNdjsonSink,
+            sessionRpcSink,
+        ]);
+        const host = createDefaultAcpSessionHostRuntime(compositeRpcSink);
         const bridge = new AcpSessionBridge(
             config,
             (msg) => this.post(msg),

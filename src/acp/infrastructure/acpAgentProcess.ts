@@ -7,7 +7,10 @@ import {
     PARAMETERIZED_MODEL_PICKER_META_KEY,
 } from "../domain/agentSpawnConfig";
 import type { AcpHostFilesystem } from "../ports/hostFilesystem";
-import type { AcpRpcNdjsonSink } from "../ports/rpcNdjsonSink";
+import type {
+    AcpRpcNdjsonDirection,
+    AcpRpcNdjsonSink,
+} from "../ports/rpcNdjsonSink";
 
 /** Node `fs` and VS Code `FileSystemError` both use distinct codes for a missing path. */
 function isFileNotFoundError(error: unknown): boolean {
@@ -21,7 +24,10 @@ function isFileNotFoundError(error: unknown): boolean {
 /**
  * Passes bytes through while appending each complete NDJSON line to the configured sink.
  */
-function createNdjsonRpcLogTap(sink: AcpRpcNdjsonSink): Transform {
+function createNdjsonRpcLogTap(
+    sink: AcpRpcNdjsonSink,
+    direction: AcpRpcNdjsonDirection,
+): Transform {
     let buffer = "";
     return new Transform({
         transform(
@@ -36,7 +42,7 @@ function createNdjsonRpcLogTap(sink: AcpRpcNdjsonSink): Transform {
             for (const part of parts) {
                 const trimmed = part.trim();
                 if (trimmed.length > 0) {
-                    sink.appendRawNdjsonLine(trimmed);
+                    sink.appendRawNdjsonLine(trimmed, { direction });
                 }
             }
             callback(null, chunk);
@@ -44,7 +50,7 @@ function createNdjsonRpcLogTap(sink: AcpRpcNdjsonSink): Transform {
         flush(callback): void {
             const trimmed = buffer.trim();
             if (trimmed.length > 0) {
-                sink.appendRawNdjsonLine(trimmed);
+                sink.appendRawNdjsonLine(trimmed, { direction });
             }
             buffer = "";
             callback();
@@ -67,8 +73,8 @@ function ndJsonStreamTapsForChild(
             ) as ReadableStream<Uint8Array>,
         };
     }
-    const towardAgent = createNdjsonRpcLogTap(rpcNdjsonSink);
-    const fromAgent = createNdjsonRpcLogTap(rpcNdjsonSink);
+    const towardAgent = createNdjsonRpcLogTap(rpcNdjsonSink, "toAgent");
+    const fromAgent = createNdjsonRpcLogTap(rpcNdjsonSink, "fromAgent");
     towardAgent.pipe(child.stdin!);
     child.stdout!.pipe(fromAgent);
     return {

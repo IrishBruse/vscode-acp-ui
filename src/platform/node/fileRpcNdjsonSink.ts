@@ -1,5 +1,8 @@
 import { createWriteStream, type WriteStream } from "node:fs";
-import type { AcpRpcNdjsonSink } from "../../acp/ports/rpcNdjsonSink";
+import type {
+    AcpRpcNdjsonLineContext,
+    AcpRpcNdjsonSink,
+} from "../../acp/ports/rpcNdjsonSink";
 
 /**
  * Append-only NDJSON file sink for standalone / non-VS Code hosts (mirrors
@@ -14,7 +17,10 @@ export class FileAcpRpcNdjsonSink implements AcpRpcNdjsonSink {
         return this.logFilePath !== null;
     }
 
-    appendRawNdjsonLine(line: string): void {
+    appendRawNdjsonLine(
+        line: string,
+        _context?: AcpRpcNdjsonLineContext,
+    ): void {
         const s = this.getOrCreateStream();
         if (s !== null) {
             s.write(`${line}\n`);

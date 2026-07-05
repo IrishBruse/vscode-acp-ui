@@ -12,16 +12,19 @@ import {
     ACP_UI_SESSION_FILE_SUFFIX,
     ACP_UI_SESSION_SCHEMA,
     type AcpUiSessionHeader,
+    type AcpUiSessionRecordDebug,
     type AcpUiSessionReplayEvent,
     normalizePromptHistory,
     parseSessionFile,
     serializeSessionHeader,
+    serializeSessionRecord,
 } from "./acpUiSessionJsonlFormat";
 
 export {
     ACP_UI_SESSION_FILE_SUFFIX,
     ACP_UI_SESSION_SCHEMA,
     type AcpUiSessionHeader,
+    type AcpUiSessionRecordDebug,
     type AcpUiSessionReplayEvent,
     type AcpUiSessionSubmitEvent,
     isReplayableSessionEvent,
@@ -30,6 +33,7 @@ export {
     parseSessionFile,
     parseSessionHeaderLine,
     serializeSessionHeader,
+    serializeSessionRecord,
     shouldPersistExtensionMessage,
 } from "./acpUiSessionJsonlFormat";
 
@@ -155,21 +159,51 @@ async function applySessionFileEdit(
 }
 
 /**
- * Appends one replay event line to a session file.
+ * Appends one replay event block to a session file.
  */
 export async function appendSessionEvent(
     uri: Uri,
     event: AcpUiSessionReplayEvent,
+    debug?: Partial<AcpUiSessionRecordDebug>,
 ): Promise<void> {
+    const block = serializeSessionRecord(event, {
+        record: "event",
+        type: event.type,
+        ...debug,
+    });
     await applySessionFileEdit(
         uri,
         (edit, doc) => {
             const text = doc.getText();
             const suffix = text.length > 0 && !text.endsWith("\n") ? "\n" : "";
             const insertPos = doc.positionAt(text.length);
-            edit.insert(uri, insertPos, `${suffix}${JSON.stringify(event)}\n`);
+            edit.insert(uri, insertPos, `${suffix}${block}`);
         },
         `Failed to append session event to ${uri.fsPath}`,
+    );
+}
+
+/**
+ * Appends one raw ACP JSON-RPC record to a session file (not replayed in the UI).
+ */
+export async function appendSessionRpcRecord(
+    uri: Uri,
+    payload: unknown,
+    debug: AcpUiSessionRecordDebug,
+): Promise<void> {
+    const block = serializeSessionRecord(payload, {
+        record: "rpc",
+        ...debug,
+    });
+    await applySessionFileEdit(
+        uri,
+        (edit, doc) => {
+            const text = doc.getText();
+            const suffix = text.length > 0 && !text.endsWith("\n") ? "\n" : "";
+            const insertPos = doc.positionAt(text.length);
+            edit.insert(uri, insertPos, `${suffix}${block}`);
+        },
+        `Failed to append ACP RPC record to ${uri.fsPath}`,
     );
 }
 
