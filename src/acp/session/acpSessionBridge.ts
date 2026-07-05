@@ -50,12 +50,25 @@ export type AcpSessionBridgeHooks = {
     onSessionInfoUpdate?: (update: acp.SessionInfoUpdate) => void;
     /** Called immediately before `session/load` replays agent-side history. */
     onResumeSession?: () => void | Promise<void>;
+    /** Called when `session/load` fails and the client falls back to `session/new`. */
+    onLoadSessionFailed?: () => void | Promise<void>;
 };
 
 export type AcpSessionConnectOptions = {
     preferredModelId?: string;
     runtimeSessionId?: string;
 };
+
+/**
+ * True when connect should call `session/load` instead of `session/new`.
+ */
+export function shouldLoadRuntimeSession(
+    runtimeSessionId: string | undefined,
+    supportsLoadSession: boolean,
+): boolean {
+    const id = runtimeSessionId?.trim();
+    return id !== undefined && id.length > 0 && supportsLoadSession;
+}
 
 /**
  * Bridges a single chat session to an ACP agent process. Translates ACP session/update notifications
@@ -484,18 +497,25 @@ export class AcpSessionBridge {
         const init = await this.agentProcess.start();
         await this.ensureAuthenticated(init);
         const runtimeSessionId = options?.runtimeSessionId?.trim();
-        const useLoad =
-            runtimeSessionId !== undefined &&
-            runtimeSessionId.length > 0 &&
-            this.agentProcess.supportsLoadSession();
+        const useLoad = shouldLoadRuntimeSession(
+            runtimeSessionId,
+            this.agentProcess.supportsLoadSession(),
+        );
         let bootstrap: acp.NewSessionResponse | acp.LoadSessionResponse;
-        if (useLoad) {
+        if (useLoad && runtimeSessionId !== undefined) {
             await this.hooks?.onResumeSession?.();
-            bootstrap = await this.loadSessionWithAuthRetry(
-                init,
-                runtimeSessionId,
-            );
-            this.acpSessionId = runtimeSessionId;
+            try {
+                bootstrap = await this.loadSessionWithAuthRetry(
+                    init,
+                    runtimeSessionId,
+                );
+                this.acpSessionId = runtimeSessionId;
+            } catch {
+                await this.hooks?.onLoadSessionFailed?.();
+                const created = await this.newSessionWithAuthRetry(init);
+                bootstrap = created;
+                this.acpSessionId = created.sessionId;
+            }
         } else {
             const created = await this.newSessionWithAuthRetry(init);
             bootstrap = created;

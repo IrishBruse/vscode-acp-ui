@@ -11,7 +11,7 @@ Handle v1 `session/update` variants that currently no-op in `sessionUpdateToWebv
 
 | `sessionUpdate` | UX goal |
 | --- | --- |
-| `user_message_chunk` | Stream user message echo during `session/load` replay |
+| `user_message_chunk` | Stream user message echo during `session/load` replay | Done in `sessionUpdateMapping.ts` |
 | `current_mode_update` | Agent / plan / ask mode changes |
 | `config_option_update` | Session config options (successor to modes) |
 | `session_info_update` | Title and metadata sync |
@@ -23,7 +23,8 @@ Missing handlers mean no mode picker, no usage meter, no agent-driven title sync
 
 ## Current behavior
 
-All listed types fall through to the default branch (no-op) in `sessionUpdateMapping.ts`.
+`user_message_chunk` maps to `appendUserText` in `sessionUpdateMapping.ts`.
+The other listed types still fall through to the default branch (no-op).
 
 ## Key files
 
@@ -35,7 +36,7 @@ All listed types fall through to the default branch (no-op) in `sessionUpdateMap
 
 ## Implementation checklist
 
-- [ ] `user_message_chunk` -> append user text in trace (pairs with [session-resume.md](./session-resume.md))
+- [x] `user_message_chunk` -> append user text in trace (pairs with [session-resume.md](./session-resume.md))
 - [ ] `current_mode_update` -> state + composer mode indicator / picker
 - [ ] `config_option_update` -> config UI or composer integration
 - [ ] `session_info_update` -> update chat title in sidebar / tab

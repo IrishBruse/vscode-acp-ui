@@ -3,12 +3,12 @@
 ## Full coverage checklist
 
 - [x] **Authentication** -- call `authenticate` / `logout` when `initialize` returns `authMethods`
-- [ ] **Session resume** -- call `session/load` on chat open when agent advertises `loadSession` and a runtime `sessionId` exists
+- [x] **Session resume** -- call `session/load` on chat open when agent advertises `loadSession` and a runtime `sessionId` exists
 - [ ] **Session list** -- call `session/list` when agent advertises the capability
 - [ ] **Session delete** -- call `session/delete` when user deletes a local chat and agent advertises the capability
 - [ ] **Terminal capability** -- advertise `terminal: true` and implement `createTerminal` (VS Code terminal API)
 - [ ] **MCP servers** -- forward `mcpServers` from `.cursor/mcp.json` or settings on `session/new` and `session/load`
-- [ ] **`user_message_chunk`** -- map replay chunks during `session/load`
+- [x] **`user_message_chunk`** -- map replay chunks during `session/load`
 - [ ] **`current_mode_update`** -- handle mode changes and expose mode in composer
 - [ ] **`config_option_update`** -- handle session config options (successor to modes)
 - [ ] **`session_info_update`** -- sync agent-driven title and metadata
@@ -129,7 +129,7 @@ Docs reference: `docs/acp/protocol/v1/file-system.mdx`
 | Topic | Upstream | ACP UI | Impact |
 |-------|----------|--------|--------|
 | **Authentication** | `initialize` may return `authMethods`, client should call `authenticate` (and optionally `logout`) | Never calls `authenticate` or `logout` | Works when agent is pre-authenticated (Cursor documents this). Fails for agents that require an explicit `authenticate` step after `initialize`. |
-| **Session resume** | `session/load` replays history when `loadSession` capability is set, Cursor docs also recommend `session/load` | Always `session/new` on connect. Stores agent `sessionId` in workspace state / JSONL header but **never** calls `loadSession` | Reopening a chat starts a **new** agent session. Local transcript replay is not wired (see JSONL section). |
+| **Session resume** | `session/load` replays history when `loadSession` capability is set | `session/load` when runtime id is stored and capability is set, else `session/new` | Reopening restores agent context when supported, JSONL fallback otherwise |
 | **Agent session list / delete** | `session/list`, `session/delete` when advertised | Local VS Code "Chats" list only (`acpUiSessionsStore`). Delete removes local metadata, does not call `session/delete` | Agent-side session history is not managed through ACP. |
 | **Terminal capability** | Client may advertise `terminal: true` and implement `terminal/create`, output, kill, release | Not advertised, `createTerminal` not implemented on `Client` | Agents that require client-hosted terminals cannot run commands through ACP UI. Tool **display** for terminal/execute kinds still works from `session/update` payloads. |
 | **MCP servers** | `session/new` and `session/load` accept `mcpServers` from project config | Always passes `mcpServers: []` | Cursor ACP docs: MCP works when launching from a project with `.cursor/mcp.json`, but this client does not forward MCP definitions in the RPC. Relies entirely on agent-side discovery. |
@@ -286,7 +286,7 @@ These divergences appear deliberate for the current product scope:
 
 | Priority | Gap | Risk |
 |----------|-----|------|
-| P0 | No `session/load` / replay | Users lose agent conversation context when reopening chats |
+| P0 | No `session/load` / replay | Done: load on reopen when capability + runtime id exist |
 | P0 | No `authenticate` | Agents requiring post-`initialize` auth fail silently or error |
 | P1 | No terminal client | Some agents cannot execute tools that need `terminal/create` |
 | P1 | JSONL persistence | Done: local transcript append + `historyReplay` fallback |

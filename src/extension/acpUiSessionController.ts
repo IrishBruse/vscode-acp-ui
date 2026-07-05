@@ -43,6 +43,7 @@ import {
 import {
     renameAcpUiSession,
     setAcpUiSessionAgentName,
+    clearAcpUiSessionRuntimeSessionId,
     setAcpUiSessionRuntimeSessionId,
 } from "./acpUiSessionsStore";
 import { getAcpUiExtensionActivation } from "./extensionServices";
@@ -73,6 +74,7 @@ export class AcpUiSessionController {
     private deferredJsonlReplayAtBootstrap = false;
     private savedJsonlEventsForLoadFallback: AcpUiSessionReplayEvent[] = [];
     private agentLoadInProgress = false;
+    private agentLoadClearedJsonl = false;
     private readonly disposables: Array<{ dispose(): void }> = [];
 
     constructor(private readonly options: SessionControllerOptions) {
@@ -296,10 +298,13 @@ export class AcpUiSessionController {
         if (!this.deferredJsonlReplayAtBootstrap) {
             return;
         }
-        if (this.savedJsonlEventsForLoadFallback.length > 0) {
+        if (this.agentLoadClearedJsonl) {
             return;
         }
-        const events = parseSessionFile(this.options.document.getText()).events;
+        const events =
+            this.savedJsonlEventsForLoadFallback.length > 0
+                ? this.savedJsonlEventsForLoadFallback
+                : parseSessionFile(this.options.document.getText()).events;
         if (events.length > 0) {
             this.replayJsonlEventsToWebview(events);
         }
@@ -422,6 +427,7 @@ export class AcpUiSessionController {
                     void this.applySessionInfoUpdate(update);
                 },
                 onResumeSession: () => this.prepareSessionFileForResume(),
+                onLoadSessionFailed: () => this.restoreSessionFileAfterLoadFailure(),
             },
         );
         this.bridge = bridge;
@@ -446,6 +452,7 @@ export class AcpUiSessionController {
             await this.replayDeferredJsonlAfterConnect();
             this.deferredJsonlReplayAtBootstrap = false;
             this.savedJsonlEventsForLoadFallback = [];
+            this.agentLoadClearedJsonl = false;
             this.options.refreshChatsList?.();
             return bridge;
         } catch (err: unknown) {
@@ -482,6 +489,7 @@ export class AcpUiSessionController {
     private async prepareSessionFileForResume(): Promise<void> {
         const parsed = parseSessionFile(this.options.document.getText());
         this.savedJsonlEventsForLoadFallback = [...parsed.events];
+        this.agentLoadClearedJsonl = true;
         this.agentLoadInProgress = true;
         this.postLive({ type: "sessionHistoryLoading", loading: true });
         this.documentReplayDepth += 1;
@@ -496,6 +504,15 @@ export class AcpUiSessionController {
         } finally {
             this.documentReplayDepth -= 1;
         }
+    }
+
+    private async restoreSessionFileAfterLoadFailure(): Promise<void> {
+        if (this.savedJsonlEventsForLoadFallback.length === 0) {
+            this.agentLoadClearedJsonl = false;
+            return;
+        }
+        await this.restoreJsonlEvents(this.savedJsonlEventsForLoadFallback);
+        this.agentLoadClearedJsonl = false;
     }
 
     private async handleWebviewMessage(message: unknown): Promise<void> {
@@ -522,6 +539,10 @@ export class AcpUiSessionController {
         if (parsed.type === "resetSession") {
             this.disposeBridge();
             this.pendingModelId = undefined;
+            this.deferredJsonlReplayAtBootstrap = false;
+            this.savedJsonlEventsForLoadFallback = [];
+            this.agentLoadClearedJsonl = false;
+            void clearAcpUiSessionRuntimeSessionId(this.sessionId);
             this.documentReplayDepth += 1;
             try {
                 await appendSessionEvent(this.documentUri, {

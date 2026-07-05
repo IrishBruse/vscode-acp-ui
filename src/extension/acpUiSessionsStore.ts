@@ -283,6 +283,24 @@ export async function setAcpUiSessionRuntimeSessionId(
 }
 
 /**
+ * Removes the stored ACP runtime session id so the next connect uses `session/new`.
+ */
+export async function clearAcpUiSessionRuntimeSessionId(
+    id: string,
+): Promise<void> {
+    const row = sessions.find((s) => s.id === id);
+    if (row === undefined) {
+        return;
+    }
+    delete row.sessionId;
+    row.updatedAt = Date.now();
+    await updateSessionHeader(row.uri, {
+        runtimeSessionId: "",
+        updatedAt: row.updatedAt,
+    });
+}
+
+/**
  * Marks a session as recently used.
  */
 export function touchAcpUiSession(id: string): void {

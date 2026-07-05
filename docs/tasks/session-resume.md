@@ -1,6 +1,6 @@
 # Task: Session resume (`session/load`)
 
-**Status:** Not started  
+**Status:** Done  
 **Priority:** P0  
 **Owner:** unassigned  
 **Source:** `docs/ACP_DIVERGENCE_REPORT.md`
@@ -10,38 +10,25 @@
 On chat open, when the agent advertises `loadSession` and the UI session has a stored runtime `sessionId`, call `session/load` instead of always `session/new`.
 Map replay `session/update` events (especially `user_message_chunk`) into the webview trace.
 
-## Why
-
-Reopening a chat today starts a **new** agent session.
-Users lose agent conversation context even when a runtime `sessionId` is persisted on the UI record.
-
-## Current behavior
-
-| Area | Today |
-| --- | --- |
-| Connect | Always `session/new` in `AcpAgentProcess` |
-| Runtime ID | Stored as `sessionId` / `runtimeSessionId` on UI session record |
-| `session/load` | Never called |
-| `user_message_chunk` | No-op in `sessionUpdateToWebviewMessages` |
-
-## Key files
+## Implementation
 
 | Path | Role |
 | --- | --- |
-| `src/acp/infrastructure/acpAgentProcess.ts` | `newSession`, SDK session setup |
-| `src/acp/session/acpSessionBridge.ts` | Session bridge on connect |
-| `src/acp/mapping/sessionUpdateMapping.ts` | `session/update` -> webview |
-| `src/extension/acpUiSessionController.ts` | Chat open / reconnect |
-| `src/extension/acpUiSessionsStore.ts` | UI session + runtime `sessionId` |
+| `src/acp/infrastructure/acpAgentProcess.ts` | `loadSession`, `supportsLoadSession` |
+| `src/acp/session/acpSessionBridge.ts` | `shouldLoadRuntimeSession`, connect load vs new, load failure fallback |
+| `src/acp/mapping/sessionUpdateMapping.ts` | `user_message_chunk` -> `appendUserText` |
+| `src/extension/acpUiSessionController.ts` | Passes `runtimeSessionId` on connect, clears id on reset |
+| `src/extension/acpUiSessionsStore.ts` | Persists `runtimeSessionId` in the `.acp` header |
 
-## Implementation checklist
+## Behavior
 
-- [ ] On chat open, read stored runtime `sessionId` from UI session record
-- [ ] If agent capability includes `loadSession` and ID exists, call `loadSession` instead of `newSession`
-- [ ] Handle `user_message_chunk` during replay (see also [session-update-handlers.md](./session-update-handlers.md))
-- [ ] Fall back to `session/new` when no runtime ID or capability missing
-- [ ] Tests for load vs new decision and replay mapping
-- [ ] `npm run verify` passes
+| Situation | Connect path |
+| --- | --- |
+| No stored runtime id | `session/new` |
+| Runtime id, no `loadSession` | `session/new`, JSONL replay after connect |
+| Runtime id + `loadSession` | `session/load`, agent replay in trace |
+| `session/load` fails | Restore JSONL, fall back to `session/new` |
+| User resets chat | Clear runtime id, then `session/new` |
 
 ## Definition of done
 

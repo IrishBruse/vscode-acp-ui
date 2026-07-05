@@ -9,7 +9,7 @@ Source: `docs/ACP_DIVERGENCE_REPORT.md` (2026-07-04).
 | --- | --- | --- | --- |
 | Authentication | P0 | Done | [auth.md](./auth.md) |
 | Client capabilities (Zed parity) | P1 | In progress | [client-capabilities.md](./client-capabilities.md) |
-| Session resume (`session/load`) | P0 | In progress | [session-resume.md](./session-resume.md) |
+| Session resume (`session/load`) | P0 | Done | [session-resume.md](./session-resume.md) |
 | JSONL persistence + `historyReplay` | P0 | Done | [jsonl-persistence.md](./jsonl-persistence.md) |
 | Terminal capability | P1 | Not started | [terminal.md](./terminal.md) |
 | Terminal authentication | P2 | Not started | [terminal-auth.md](./terminal-auth.md) |
