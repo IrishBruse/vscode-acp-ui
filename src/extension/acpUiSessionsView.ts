@@ -39,7 +39,6 @@ import {
     ensureLocalSessionForAgentSession,
     findByRuntimeSessionId,
     getActiveAcpUiSessionId,
-    listAcpUiSessionsForAgent,
     refreshAcpUiSessionsFromDisk,
     removeAcpUiSession,
     setActiveAcpUiSessionId,
@@ -96,6 +95,7 @@ export class AcpUiSessionsViewProvider
     private focusedRuntimeSessionId: string | null = null;
     private agentSessions: acp.SessionInfo[] = [];
     private agentListSupported = false;
+    private agentListProbeComplete = false;
     private treeView: TreeView<AcpUiSessionsTreeNode> | undefined;
 
     private readonly extensionContext: ExtensionContext;
@@ -200,11 +200,14 @@ export class AcpUiSessionsViewProvider
     }
 
     async refreshFromAgent(): Promise<void> {
+        this.agentListProbeComplete = false;
+        this.refresh();
         await refreshAcpUiSessionsFromDisk();
         const agent = getActiveAgentConfig();
         if (agent === undefined) {
             this.agentSessions = [];
             this.agentListSupported = false;
+            this.agentListProbeComplete = true;
             this.updateAgentMessage();
             this.refresh();
             return;
@@ -216,6 +219,7 @@ export class AcpUiSessionsViewProvider
         if (cwd === undefined) {
             this.agentSessions = [];
             this.agentListSupported = false;
+            this.agentListProbeComplete = true;
             this.updateAgentMessage();
             this.refresh();
             return;
@@ -234,6 +238,7 @@ export class AcpUiSessionsViewProvider
             this.agentListSupported = false;
             this.agentSessions = [];
         }
+        this.agentListProbeComplete = true;
         this.updateAgentMessage();
         this.refresh();
     }
@@ -257,46 +262,28 @@ export class AcpUiSessionsViewProvider
             ];
         }
 
-        if (this.agentListSupported) {
-            if (this.agentSessions.length === 0) {
-                return [
-                    new AcpUiPlaceholderTreeItem(
-                        "No chats yet. Use + to start a new chat.",
-                    ),
-                ];
-            }
-            const activeLocalId = getActiveAcpUiSessionId();
-            return this.agentSessions.map((row) => {
-                const local = findByRuntimeSessionId(agent.name, row.sessionId);
-                const isActive =
-                    local !== undefined && local.id === activeLocalId;
-                return new AcpUiSessionTreeItem(
-                    row.sessionId,
-                    sessionInfoLabel(row),
-                    isActive,
-                    agent.name,
-                    local?.id,
-                );
-            });
+        if (!this.agentListProbeComplete) {
+            return [new AcpUiPlaceholderTreeItem("Loading chats...")];
         }
 
-        const localRows = listAcpUiSessionsForAgent(agent.name);
-        if (localRows.length === 0) {
+        if (!this.agentListSupported || this.agentSessions.length === 0) {
             return [
                 new AcpUiPlaceholderTreeItem(
                     "No chats yet. Use + to start a new chat.",
                 ),
             ];
         }
-        const activeId = getActiveAcpUiSessionId();
-        return localRows.map((row) => {
-            const runtimeId = row.sessionId ?? row.id;
+
+        const activeLocalId = getActiveAcpUiSessionId();
+        return this.agentSessions.map((row) => {
+            const local = findByRuntimeSessionId(agent.name, row.sessionId);
+            const isActive = local !== undefined && local.id === activeLocalId;
             return new AcpUiSessionTreeItem(
-                runtimeId,
-                row.title,
-                row.id === activeId,
+                row.sessionId,
+                sessionInfoLabel(row),
+                isActive,
                 agent.name,
-                row.id,
+                local?.id,
             );
         });
     }
