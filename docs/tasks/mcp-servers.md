@@ -19,7 +19,7 @@ This client does not forward MCP definitions in RPC and relies entirely on agent
 | Area | Today |
 | --- | --- |
 | `session/new` | Always `mcpServers: []` |
-| `session/load` | Not called (see [session-resume.md](./session-resume.md)) |
+| `session/load` | Called with cwd, `mcpServers` is still `[]` |
 
 ## Key files
 

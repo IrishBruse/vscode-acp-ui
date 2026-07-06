@@ -34,7 +34,6 @@ That includes `user_message_chunk` to user text in the trace.
 [acpUiSessionController.ts](../../../src/extension/acpUiSessionController.ts) passes `runtimeSessionId` on connect and clears it on chat reset.
 [acpUiSessionsStore.ts](../../../src/extension/acpUiSessionsStore.ts) persists the runtime id in the session header.
 
-Tasks: [session-resume](../../tasks/session-resume.md).
 Protocol: [session setup](../../acp/protocol/v1/session-setup.mdx).
 
 ### Local persistence (JSONL)
@@ -48,8 +47,6 @@ ACP UI uses client-owned JSONL session files (`acpUi/session/1` schema) as a sup
 When `session/load` runs successfully, JSONL is cleared first and agent replay is authoritative.
 On load failure, saved JSONL restores to disk and replays in the webview.
 
-Task: [jsonl-persistence](../../tasks/jsonl-persistence.md).
-
 ### List and delete
 
 When the active agent advertises `sessionCapabilities.list`, the Chats sidebar is driven by `session/list` for the workspace cwd.
@@ -62,7 +59,6 @@ That invokes [deleteAgentSession](../../../src/extension/acpAgentSessionLister.t
 [deleteAgentSession](../../../src/extension/acpAgentSessionLister.ts#L98-L129) no-ops unless [supportsDeleteSessions](../../../src/acp/infrastructure/acpAgentProcess.ts#L263-L267) is true.
 Agent RPC failures are logged and local removal still completes.
 
-Task: [session-list-delete](../../tasks/session-list-delete.md).
 Protocol: [session list](../../acp/protocol/v1/session-list.mdx), [session delete](../../acp/protocol/v1/session-delete.mdx).
 
 ### Session updates

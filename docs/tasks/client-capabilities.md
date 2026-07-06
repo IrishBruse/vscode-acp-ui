@@ -66,7 +66,7 @@ Supports legacy auth where the agent embeds login command details in auth method
 - [ ] Spawn interactive login subprocess when agent returns terminal-auth meta on an auth method (see Zed `meta_terminal_auth_task`)
 - [ ] Do not advertise until login flow is implemented
 
-Related: [auth.md](./auth.md) (agent-type `authenticate` only today).
+Related: [authentication](../features/acp/authentication.md) (agent-type `authenticate` only today).
 
 ### `terminal: true`
 

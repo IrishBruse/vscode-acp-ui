@@ -24,7 +24,7 @@ Zed sends for every agent:
 
 Some agents (including legacy Gemini paths in Zed) embed login command details in the auth method `_meta.terminal-auth` object.
 They use that instead of first-class `type: "terminal"` auth methods.
-ACP UI only supports agent-type `authenticate` today ([auth.md](./auth.md)).
+ACP UI only supports agent-type `authenticate` today (see [authentication](../features/acp/authentication.md)).
 
 ## Current behavior
 
@@ -61,5 +61,5 @@ ACP UI only supports agent-type `authenticate` today ([auth.md](./auth.md)).
 ## References
 
 - [client-capabilities.md](./client-capabilities.md)
-- [auth.md](./auth.md)
+- [authentication](../features/acp/authentication.md)
 - [ACP authentication](https://agentclientprotocol.com/protocol/v1/authentication)

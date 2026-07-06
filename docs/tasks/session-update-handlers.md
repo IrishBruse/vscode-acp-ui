@@ -36,7 +36,7 @@ The other listed types still fall through to the default branch (no-op).
 
 ## Implementation checklist
 
-- [x] `user_message_chunk` -> append user text in trace (pairs with [session-resume.md](./session-resume.md))
+- [x] `user_message_chunk` -> append user text in trace (shipped with `session/load` replay)
 - [ ] `current_mode_update` -> state + composer mode indicator / picker
 - [ ] `config_option_update` -> config UI or composer integration
 - [ ] `session_info_update` -> update chat title in sidebar / tab

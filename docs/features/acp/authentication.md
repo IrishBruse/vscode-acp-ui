@@ -30,7 +30,6 @@ Env-var and terminal auth methods are rejected with an explicit error.
 On dispose, [logoutBestEffort](../../../src/acp/session/acpSessionBridge.ts#L929) runs.
 It calls [logout](../../../src/acp/infrastructure/acpAgentProcess.ts#L241-L246) when logout is supported.
 
-Task: [authentication](../../tasks/auth.md).
 Protocol: [authentication](../../acp/protocol/v1/authentication.mdx).
 
 ### Terminal auth
