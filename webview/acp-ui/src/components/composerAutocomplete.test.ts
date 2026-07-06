@@ -23,6 +23,34 @@ describe("buildComposerAutocompleteState", () => {
         ]);
     });
 
+    it("splits trailing skill labels and groups slash commands", () => {
+        const state = buildComposerAutocompleteState({
+            draft: "/",
+            caret: 1,
+            slashCommands: [
+                {
+                    name: "release",
+                    description: "Bump version (user skill) (global)",
+                },
+                {
+                    name: "docs",
+                    description: "Align docs (user skill) (workspace)",
+                },
+                { name: "rename", description: "Rename chat" },
+            ],
+            workspaceFiles: [],
+        });
+        expect(state?.groups.map((group) => group.label)).toEqual([
+            undefined,
+            "workspace",
+            "user skill",
+        ]);
+        expect(state?.items.find((item) => item.primary === "/release")).toMatchObject({
+            secondary: "Bump version",
+            source: "user skill · global",
+        });
+    });
+
     it("builds file suggestions for @ query", () => {
         const state = buildComposerAutocompleteState({
             draft: "read @chat",

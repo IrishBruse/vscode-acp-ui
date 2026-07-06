@@ -5,6 +5,7 @@ import type {
     ToolCallStatus,
 } from "../../protocol/extensionHostMessages";
 import { sessionConfigOptionsFromAgent } from "../session/sessionConfigOptions";
+import { normalizeSlashCommand } from "../slashCommandMetadata";
 import { computeToolCallDiffRows } from "./toolCallDiffLines";
 
 const maxToolDisplayChars = 120_000;
@@ -769,12 +770,12 @@ export function sessionUpdateToWebviewMessages(
                             break;
                         }
                     }
-                    return {
+                    return normalizeSlashCommand({
                         name,
                         description,
                         ...(inputHint !== undefined ? { inputHint } : {}),
                         ...(source !== undefined ? { source } : {}),
-                    };
+                    });
                 })
                 .filter((x): x is NonNullable<typeof x> => x !== null);
             return [{ type: "slashCommands", commands }];

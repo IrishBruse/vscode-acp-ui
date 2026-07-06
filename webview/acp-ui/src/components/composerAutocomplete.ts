@@ -1,13 +1,27 @@
+import {
+    compareSlashCommandGroups,
+    normalizeSlashCommand,
+    parseTrailingParenLabels,
+    slashCommandGroupLabel,
+} from "../../../../src/acp/slashCommandMetadata";
+
 export type ComposerSuggestionItem = {
     key: string;
     primary: string;
     secondary?: string;
+    source?: string;
     insertText: string;
+};
+
+export type ComposerSuggestionGroup = {
+    label?: string;
+    items: ComposerSuggestionItem[];
 };
 
 export type ComposerAutocompleteState = {
     mode: "slash" | "file";
     query: string;
+    groups: ComposerSuggestionGroup[];
     items: ComposerSuggestionItem[];
     activeIndex: number;
 };
@@ -28,6 +42,46 @@ function queryFromCaret(draft: string, caret: number, prefix: "/" | "@"): string
     return match[1] ?? "";
 }
 
+function slashSuggestionItem(command: {
+    name: string;
+    description: string;
+    source?: string;
+}): ComposerSuggestionItem {
+    const normalized = normalizeSlashCommand(command);
+    return {
+        key: `slash:${command.name}`,
+        primary: `/${command.name}`,
+        secondary: normalized.description,
+        ...(normalized.source !== undefined ? { source: normalized.source } : {}),
+        insertText: `/${command.name} `,
+    };
+}
+
+function groupSlashSuggestionItems(
+    items: ComposerSuggestionItem[],
+): ComposerSuggestionGroup[] {
+    const grouped = new Map<string, ComposerSuggestionItem[]>();
+    for (const item of items) {
+        const label = slashCommandGroupLabel(item.source);
+        const bucket = grouped.get(label);
+        if (bucket === undefined) {
+            grouped.set(label, [item]);
+            continue;
+        }
+        bucket.push(item);
+    }
+    return [...grouped.entries()]
+        .sort(([left], [right]) => compareSlashCommandGroups(left, right))
+        .map(([label, groupItems]) => ({
+            label: label === "Built-in" ? undefined : label,
+            items: groupItems.sort((left, right) =>
+                left.primary.localeCompare(right.primary, undefined, {
+                    sensitivity: "base",
+                }),
+            ),
+        }));
+}
+
 export function buildComposerAutocompleteState(args: {
     draft: string;
     caret: number;
@@ -39,19 +93,10 @@ export function buildComposerAutocompleteState(args: {
         const queryLower = slashQuery.toLowerCase();
         const items = args.slashCommands
             .filter((command) => command.name.toLowerCase().startsWith(queryLower))
-            .map((command) => ({
-                key: `slash:${command.name}`,
-                primary: `/${command.name}`,
-                secondary: command.description,
-                insertText: `/${command.name} `,
-                source: command.source,
-            }))
-            .map(({ source, ...item }) => ({
-                ...item,
-                ...(source !== undefined ? { secondary: `${item.secondary} · ${source}` } : {}),
-            }));
+            .map((command) => slashSuggestionItem(command));
+        const groups = groupSlashSuggestionItems(items);
         return items.length > 0
-            ? { mode: "slash", query: slashQuery, items, activeIndex: 0 }
+            ? { mode: "slash", query: slashQuery, groups, items, activeIndex: 0 }
             : null;
     }
     const fileQuery = queryFromCaret(args.draft, args.caret, "@");
@@ -68,7 +113,13 @@ export function buildComposerAutocompleteState(args: {
             insertText: `${formatPathMention(filePath)} `,
         }));
     return items.length > 0
-        ? { mode: "file", query: fileQuery, items, activeIndex: 0 }
+        ? {
+              mode: "file",
+              query: fileQuery,
+              groups: [{ items }],
+              items,
+              activeIndex: 0,
+          }
         : null;
 }
 
@@ -79,3 +130,9 @@ export function wrapIndex(index: number, size: number): number {
     const mod = index % size;
     return mod < 0 ? mod + size : mod;
 }
+
+export {
+    normalizeSlashCommand,
+    parseTrailingParenLabels,
+    slashCommandGroupLabel,
+};

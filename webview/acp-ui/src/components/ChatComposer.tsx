@@ -1,4 +1,5 @@
 import {
+  Fragment,
   type KeyboardEvent,
   type ReactElement,
   type RefObject,
@@ -253,34 +254,62 @@ export function ChatComposer({
               autocomplete.mode === "slash" ? "Slash commands" : "Workspace files"
             }
           >
-            {autocomplete.items.map((item, index) => (
-              <button
-                key={item.key}
-                ref={index === activeIndex ? activeItemRef : undefined}
-                type="button"
-                role="option"
-                aria-selected={index === activeIndex}
-                className={
-                  index === activeIndex
-                    ? "composer-slash-item composer-slash-item--active"
-                    : "composer-slash-item"
-                }
-                onClick={() => {
-                  onDraftChange(
-                    draft.replace(
-                      /(?:^|\s)(?:\/[^\s]*|@[^\s]*)$/,
-                      (match) =>
-                        `${match.startsWith(" ") ? " " : ""}${item.insertText.trimEnd()}`,
-                    ),
-                  );
-                }}
-              >
-                <span className="composer-slash-name">{item.primary}</span>
-                {item.secondary !== undefined && item.secondary.length > 0 ? (
-                  <span className="composer-slash-desc">{item.secondary}</span>
-                ) : null}
-              </button>
-            ))}
+            {(() => {
+              let itemIndex = 0;
+              return autocomplete.groups.map((group) => (
+                <Fragment key={group.label ?? "built-in"}>
+                  {group.label !== undefined ? (
+                    <div
+                      className="composer-slash-group"
+                      role="presentation"
+                      aria-hidden="true"
+                    >
+                      {group.label}
+                    </div>
+                  ) : null}
+                  {group.items.map((item) => {
+                    const index = itemIndex;
+                    itemIndex += 1;
+                    return (
+                      <button
+                        key={item.key}
+                        ref={index === activeIndex ? activeItemRef : undefined}
+                        type="button"
+                        role="option"
+                        aria-selected={index === activeIndex}
+                        className={
+                          index === activeIndex
+                            ? "composer-slash-item composer-slash-item--active"
+                            : "composer-slash-item"
+                        }
+                        onClick={() => {
+                          onDraftChange(
+                            draft.replace(
+                              /(?:^|\s)(?:\/[^\s]*|@[^\s]*)$/,
+                              (match) =>
+                                `${match.startsWith(" ") ? " " : ""}${item.insertText.trimEnd()}`,
+                            ),
+                          );
+                        }}
+                      >
+                        <span className="composer-slash-name">{item.primary}</span>
+                        {item.secondary !== undefined &&
+                        item.secondary.length > 0 ? (
+                          <span className="composer-slash-desc">
+                            {item.secondary}
+                          </span>
+                        ) : null}
+                        {item.source !== undefined && item.source.length > 0 ? (
+                          <span className="composer-slash-source">
+                            {item.source}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </Fragment>
+              ));
+            })()}
           </div>
         ) : null}
         <textarea
