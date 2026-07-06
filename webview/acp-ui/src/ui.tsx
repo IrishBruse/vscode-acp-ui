@@ -53,6 +53,7 @@ export function mountChatView(
     }) => void,
     initialChatState?: ChatState,
     postOpenNewChat?: () => void,
+    postOpenWorkspacePath?: (path: string) => void,
 ): ChatView {
     root.replaceChildren();
     root.className = "root agent-root";
@@ -74,6 +75,7 @@ export function mountChatView(
             postSetSessionConfigOption={postSetSessionConfigOption}
             postSavePromptHistory={postSavePromptHistory}
             postOpenNewChat={postOpenNewChat}
+            postOpenWorkspacePath={postOpenWorkspacePath}
             postPermissionResponse={postPermissionResponse}
             postCursorAskQuestionResponse={postCursorAskQuestionResponse}
             postCursorCreatePlanResponse={postCursorCreatePlanResponse}

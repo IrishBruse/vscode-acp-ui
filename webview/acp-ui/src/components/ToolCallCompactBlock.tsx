@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { MouseEvent, ReactElement } from "react";
 import "./ToolCallCompactBlock.css";
 import type { TraceToolItem } from "../chatReducer";
 import {
@@ -9,7 +9,43 @@ import {
     diffLineStats,
 } from "../toolCallCompactText";
 
-function CompactDetailText({ parts }: { parts: CompactToolDetailParts }): ReactElement {
+function openPathClick(
+    event: MouseEvent<HTMLAnchorElement>,
+    openPath: string,
+    onOpenWorkspacePath: ((path: string) => void) | undefined,
+): void {
+    event.preventDefault();
+    onOpenWorkspacePath?.(openPath);
+}
+
+function CompactPathLink({
+    segment,
+    onOpenWorkspacePath,
+}: {
+    segment: NonNullable<CompactToolDetailParts["pathSegment"]>;
+    onOpenWorkspacePath: ((path: string) => void) | undefined;
+}): ReactElement {
+    return (
+        <a
+            className="tool-call-compact-path-link"
+            href="#"
+            onClick={(event) => {
+                openPathClick(event, segment.openPath, onOpenWorkspacePath);
+            }}
+        >
+            <span className="tool-call-compact-path-short">{segment.label}</span>
+            <span className="tool-call-compact-path-full">{segment.title}</span>
+        </a>
+    );
+}
+
+function CompactDetailText({
+    parts,
+    onOpenWorkspacePath,
+}: {
+    parts: CompactToolDetailParts;
+    onOpenWorkspacePath: ((path: string) => void) | undefined;
+}): ReactElement {
     const segment = parts.pathSegment;
     if (segment === undefined) {
         return (
@@ -19,9 +55,10 @@ function CompactDetailText({ parts }: { parts: CompactToolDetailParts }): ReactE
     return (
         <span className="tool-call-compact-detail-text">
             {segment.prefix ?? null}
-            <span className="tool-call-compact-path" title={segment.title}>
-                {segment.label}
-            </span>
+            <CompactPathLink
+                segment={segment}
+                onOpenWorkspacePath={onOpenWorkspacePath}
+            />
             {segment.suffix ?? null}
         </span>
     );
@@ -29,8 +66,10 @@ function CompactDetailText({ parts }: { parts: CompactToolDetailParts }): ReactE
 
 function CompactVerbDetail({
     parts,
+    onOpenWorkspacePath,
 }: {
     parts: CompactToolDetailParts;
+    onOpenWorkspacePath: ((path: string) => void) | undefined;
 }): ReactElement {
     return (
         <>
@@ -38,14 +77,23 @@ function CompactVerbDetail({
             {parts.detail.length > 0 ? (
                 <>
                     {" "}
-                    <CompactDetailText parts={parts} />
+                    <CompactDetailText
+                        parts={parts}
+                        onOpenWorkspacePath={onOpenWorkspacePath}
+                    />
                 </>
             ) : null}
         </>
     );
 }
 
-function CompactEditLine({ item }: { item: TraceToolItem }): ReactElement {
+function CompactEditLine({
+    item,
+    onOpenWorkspacePath,
+}: {
+    item: TraceToolItem;
+    onOpenWorkspacePath: ((path: string) => void) | undefined;
+}): ReactElement {
     const parts = compactToolDetailParts(item);
     const { added, removed } = diffLineStats(item.diffRows);
     return (
@@ -54,7 +102,10 @@ function CompactEditLine({ item }: { item: TraceToolItem }): ReactElement {
             {parts.detail.length > 0 ? (
                 <>
                     {" "}
-                    <CompactDetailText parts={parts} />
+                    <CompactDetailText
+                        parts={parts}
+                        onOpenWorkspacePath={onOpenWorkspacePath}
+                    />
                 </>
             ) : null}
             {added > 0 ? (
@@ -73,21 +124,44 @@ function CompactEditLine({ item }: { item: TraceToolItem }): ReactElement {
     );
 }
 
-function CompactDetailLine({ item }: { item: TraceToolItem }): ReactElement {
+function CompactDetailLine({
+    item,
+    onOpenWorkspacePath,
+}: {
+    item: TraceToolItem;
+    onOpenWorkspacePath: ((path: string) => void) | undefined;
+}): ReactElement {
     if (compactToolShowsDiffStats(item)) {
-        return <CompactEditLine item={item} />;
+        return (
+            <CompactEditLine
+                item={item}
+                onOpenWorkspacePath={onOpenWorkspacePath}
+            />
+        );
     }
-    return <CompactVerbDetail parts={compactToolDetailParts(item)} />;
+    return (
+        <CompactVerbDetail
+            parts={compactToolDetailParts(item)}
+            onOpenWorkspacePath={onOpenWorkspacePath}
+        />
+    );
 }
 
 function CompactGroupSummary({
     items,
+    onOpenWorkspacePath,
 }: {
     items: TraceToolItem[];
+    onOpenWorkspacePath: ((path: string) => void) | undefined;
 }): ReactElement {
     const parts = compactToolGroupSummaryParts(items);
     if (parts === null) {
-        return <CompactDetailLine item={items[0]!} />;
+        return (
+            <CompactDetailLine
+                item={items[0]!}
+                onOpenWorkspacePath={onOpenWorkspacePath}
+            />
+        );
     }
     return (
         <>
@@ -106,9 +180,11 @@ function CompactGroupSummary({
 export function ToolCallCompactBlock({
     items,
     className,
+    onOpenWorkspacePath,
 }: {
     items: TraceToolItem[];
     className?: string;
+    onOpenWorkspacePath?: (path: string) => void;
 }): ReactElement {
     const single = items.length === 1;
     const inProgress = items.some(
@@ -128,9 +204,15 @@ export function ToolCallCompactBlock({
         >
             <div className="tool-call-compact-summary">
                 {single ? (
-                    <CompactDetailLine item={items[0]!} />
+                    <CompactDetailLine
+                        item={items[0]!}
+                        onOpenWorkspacePath={onOpenWorkspacePath}
+                    />
                 ) : (
-                    <CompactGroupSummary items={items} />
+                    <CompactGroupSummary
+                        items={items}
+                        onOpenWorkspacePath={onOpenWorkspacePath}
+                    />
                 )}
             </div>
             {!single ? (
@@ -145,7 +227,10 @@ export function ToolCallCompactBlock({
                             data-tool-id={item.toolCallId}
                             data-status={item.status}
                         >
-                            <CompactDetailLine item={item} />
+                            <CompactDetailLine
+                                item={item}
+                                onOpenWorkspacePath={onOpenWorkspacePath}
+                            />
                         </li>
                     ))}
                 </ul>

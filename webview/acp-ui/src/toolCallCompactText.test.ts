@@ -42,6 +42,7 @@ describe("toolCallCompactText", () => {
             pathSegment: {
                 label: "AGENTS.md",
                 title: "~/git/vscode-acp-ui/AGENTS.md",
+                openPath: "/home/econn/git/vscode-acp-ui/AGENTS.md",
             },
         });
         const grep = toolItem({
@@ -148,6 +149,7 @@ describe("toolCallCompactText", () => {
             pathSegment: {
                 label: "TraceList.css",
                 title: "webview/acp-ui/src/components/TraceList.css",
+                openPath: "webview/acp-ui/src/components/TraceList.css",
             },
         });
     });

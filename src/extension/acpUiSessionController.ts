@@ -3,7 +3,7 @@ import {
     type ExtensionContext,
     RelativePattern,
     type TextDocument,
-    type Uri,
+    Uri,
     type Webview,
     window,
     workspace,
@@ -29,6 +29,7 @@ import {
 } from "../acp/session/sessionConfigOptionsCache";
 import { formatPathWithTilde } from "../platform/pathDisplay";
 import { resolveUserHomeDir } from "../platform/resolveUserHomeDir";
+import { resolveWorkspacePath } from "../platform/resolveWorkspacePath";
 import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";
 import { resolveMarkdownThemeVariables } from "../platform/vscode/resolveMarkdownThemeVariables";
 import type {
@@ -572,6 +573,25 @@ export class AcpUiSessionController {
 
         if (parsed.type === "openNewChat") {
             void commands.executeCommand("ib-acp-ui.openChat");
+            return;
+        }
+
+        if (parsed.type === "openWorkspacePath") {
+            const workspaceRoot = workspace.workspaceFolders?.[0]?.uri.fsPath;
+            const absolute = resolveWorkspacePath(
+                parsed.path,
+                workspaceRoot,
+            );
+            try {
+                await commands.executeCommand("vscode.open", Uri.file(absolute));
+            } catch {
+                void window.showErrorMessage(
+                    `Could not open ${formatPathWithTilde(
+                        parsed.path,
+                        resolveUserHomeDir(),
+                    )}`,
+                );
+            }
             return;
         }
 

@@ -100,6 +100,9 @@ function tryMountView(): void {
         () => {
             host.post({ type: "openNewChat" });
         },
+        (path) => {
+            host.post({ type: "openWorkspacePath", path });
+        },
     );
 }
 

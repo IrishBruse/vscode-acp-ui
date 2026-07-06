@@ -68,6 +68,7 @@ export type AcpUiAppProps = {
   ) => void;
   postSavePromptHistory: (entries: string[]) => void;
   postOpenNewChat?: () => void;
+  postOpenWorkspacePath?: (path: string) => void;
   postPermissionResponse: (
     payload:
       | { requestId: string; selectedOptionId: string }
@@ -109,6 +110,7 @@ export function AcpUiApp({
   postSetSessionConfigOption,
   postSavePromptHistory,
   postOpenNewChat,
+  postOpenWorkspacePath,
   postPermissionResponse,
   postCursorAskQuestionResponse,
   postCursorCreatePlanResponse,
@@ -618,6 +620,7 @@ export function AcpUiApp({
               showThoughts={showThinkingBlocks}
               expandAllToolOutputs={expandAllToolOutputs}
               toolCallVerbosity={toolCallVerbosity}
+              onOpenWorkspacePath={postOpenWorkspacePath}
               onCollapseExpandAll={() => {
                 setExpandAllToolOutputs(false);
               }}

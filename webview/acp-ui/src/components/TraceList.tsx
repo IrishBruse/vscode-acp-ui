@@ -117,12 +117,14 @@ export function TraceList({
     expandAllToolOutputs,
     toolCallVerbosity,
     onCollapseExpandAll,
+    onOpenWorkspacePath,
 }: {
     items: TraceItem[];
     showThoughts: boolean;
     expandAllToolOutputs: boolean;
     toolCallVerbosity: ToolCallVerbosity;
     onCollapseExpandAll?: () => void;
+    onOpenWorkspacePath?: (path: string) => void;
 }): ReactElement {
     const segments = partitionTraceSegments(
         items,
@@ -164,6 +166,7 @@ export function TraceList({
                                 .join(":")}
                             className={gapClass.trim()}
                             items={segment.tools}
+                            onOpenWorkspacePath={onOpenWorkspacePath}
                         />
                     );
                 }

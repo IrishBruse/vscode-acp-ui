@@ -44,6 +44,7 @@ function pathSegmentFromRaw(
             ...(prefix.length > 0 ? { prefix } : {}),
             label: short,
             title: full,
+            openPath: rawPath.trim(),
             ...(suffix.length > 0 ? { suffix } : {}),
         },
     };
@@ -62,11 +63,12 @@ export type CompactToolDetailParts = {
     verb: string;
     /** Visible detail text (uses short path labels). */
     detail: string;
-    /** When set, the path portion is rendered with a hover title for the full path. */
+    /** When set, the path portion is rendered as a clickable link with hover expansion. */
     pathSegment?: {
         prefix?: string;
         label: string;
         title: string;
+        openPath: string;
         suffix?: string;
     };
 };
@@ -169,10 +171,10 @@ function grepPathFromItem(item: TraceToolItem): string {
     const inMatch =
         content.match(/\bin\s+(\S+)/i) ?? subtitle.match(/\bin\s+(\S+)/i);
     if (inMatch?.[1] !== undefined && inMatch[1].length > 0) {
-        return formatCompactPath(inMatch[1]);
+        return inMatch[1];
     }
     if (subtitle.length > 0) {
-        return formatCompactPath(pathWithoutLineRange(subtitle));
+        return pathWithoutLineRange(subtitle);
     }
     return "";
 }
@@ -194,10 +196,10 @@ function globScopeFromItem(item: TraceToolItem): string {
     const inMatch =
         content.match(/\bin\s+(\S+)/i) ?? subtitle.match(/\bin\s+(\S+)/i);
     if (inMatch?.[1] !== undefined && inMatch[1].length > 0) {
-        return formatCompactPath(inMatch[1]);
+        return inMatch[1];
     }
     if (subtitle.length > 0 && !subtitle.includes('"')) {
-        return formatCompactPath(subtitle);
+        return subtitle;
     }
     return ".";
 }

@@ -50,15 +50,37 @@
     font-weight: 400;
 }
 
-.tool-call-compact-path {
-    cursor: default;
+.tool-call-compact-detail-text .tool-call-compact-path-link,
+.tool-call-compact-detail-text .tool-call-compact-path-link:link,
+.tool-call-compact-detail-text .tool-call-compact-path-link:visited {
+    color: var(--vscode-descriptionForeground);
+    text-decoration: none;
+    cursor: pointer;
 }
 
-.tool-call-compact-path:hover {
-    color: var(--vscode-foreground);
+.tool-call-compact-detail-text .tool-call-compact-path-link:hover,
+.tool-call-compact-detail-text .tool-call-compact-path-link:focus-visible {
+    color: var(--vscode-textLink-foreground);
     text-decoration: underline;
-    text-decoration-style: dotted;
+    text-decoration-style: solid;
     text-underline-offset: 2px;
+}
+
+.tool-call-compact-path-link .tool-call-compact-path-short,
+.tool-call-compact-path-link .tool-call-compact-path-full {
+    color: inherit;
+}
+
+.tool-call-compact-path-full {
+    display: none;
+}
+
+.tool-call-compact-path-link:hover .tool-call-compact-path-short {
+    display: none;
+}
+
+.tool-call-compact-path-link:hover .tool-call-compact-path-full {
+    display: inline;
 }
 
 .tool-call-compact-stat--added {

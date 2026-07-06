@@ -99,7 +99,9 @@ export type WebviewToExtensionMessage =
     /** Persists composer Arrow Up / Down prompt history for this session. */
     | { type: "savePromptHistory"; entries: string[] }
     /** Open a new chat with the default agent (extension host handles creation). */
-    | { type: "openNewChat" };
+    | { type: "openNewChat" }
+    /** Open a workspace file from a compact tool path link. */
+    | { type: "openWorkspacePath"; path: string };
 
 /**
  * Messages sent from the extension host to a webview (or other UI host).
@@ -403,6 +405,13 @@ export function tryParseWebviewMessage(
     }
     if (messageType === "openNewChat") {
         return { type: "openNewChat" };
+    }
+    if (
+        messageType === "openWorkspacePath" &&
+        typeof record.path === "string" &&
+        record.path.trim().length > 0
+    ) {
+        return { type: "openWorkspacePath", path: record.path.trim() };
     }
     return null;
 }

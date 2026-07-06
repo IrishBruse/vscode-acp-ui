@@ -215,6 +215,11 @@ async function bootstrap(): Promise<void> {
                 (payload) => {
                     host.post({ type: "cursorCreatePlanResponse", ...payload });
                 },
+                undefined,
+                undefined,
+                (path) => {
+                    host.post({ type: "openWorkspacePath", path });
+                },
             );
             return;
         }
