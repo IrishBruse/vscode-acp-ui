@@ -145,15 +145,19 @@ export class AcpUiSessionController {
 
     async sendBootstrapMessages(header: AcpUiSessionHeader): Promise<void> {
         const parsed = parseSessionFile(this.options.document.getText());
-        const initPayload = await this.buildInitPayload(header);
         this.deferredJsonlReplayAtBootstrap =
             shouldDeferJsonlHistoryReplay(header);
+        if (this.deferredJsonlReplayAtBootstrap) {
+            this.agentLoadInProgress = true;
+            this.postLive({ type: "sessionHistoryLoading", loading: true });
+        }
         if (parsed.events.length > 0 && !this.deferredJsonlReplayAtBootstrap) {
             this.post({
                 type: "historyReplay",
                 events: parsed.events as AcpUiHistoryReplayEvent[],
             });
         }
+        const initPayload = await this.buildInitPayload(header);
         this.post({ type: "init", ...initPayload });
         void this.postMarkdownThemeVariables();
         if (
@@ -221,6 +225,9 @@ export class AcpUiSessionController {
         return {
             sessionId: header.id,
             title: header.title,
+            ...(shouldDeferJsonlHistoryReplay(header)
+                ? { sessionHistoryLoading: true }
+                : {}),
             ...(Object.keys(vscodeThemeVariables).length > 0
                 ? { vscodeThemeVariables }
                 : {}),

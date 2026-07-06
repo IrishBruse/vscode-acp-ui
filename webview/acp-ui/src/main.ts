@@ -4,7 +4,7 @@ import type {
 } from "../../../src/protocol/extensionHostMessages";
 import "./global.css";
 import "./boot.css";
-import { replayChatState } from "./chatReducer";
+import { replayChatState, createChatStateFromInit, type ChatState } from "./chatReducer";
 import { createVsCodeAcpUiHost } from "./host";
 import { type ChatView, type InitPayload, mountChatView } from "./ui";
 
@@ -36,6 +36,14 @@ let view: ChatView | null = null;
 let initReceived = false;
 let pendingInit: InitPayload | null = null;
 let pendingHistory: AcpUiHistoryReplayEvent[] | undefined;
+let pendingSessionHistoryLoading = false;
+
+function applyPendingSessionHistoryLoading(state: ChatState): ChatState {
+    if (!pendingSessionHistoryLoading) {
+        return state;
+    }
+    return { ...state, sessionHistoryLoading: true };
+}
 
 function tryMountView(): void {
     if (view !== null || pendingInit === null) {
@@ -45,8 +53,12 @@ function tryMountView(): void {
     clearTimeout(initRetryTimer);
     const initialChatState =
         pendingHistory !== undefined && pendingHistory.length > 0
-            ? replayChatState(pendingInit, pendingHistory)
-            : undefined;
+            ? applyPendingSessionHistoryLoading(
+                  replayChatState(pendingInit, pendingHistory),
+              )
+            : applyPendingSessionHistoryLoading(
+                  createChatStateFromInit(pendingInit),
+              );
     view = mountChatView(
         mount as HTMLElement,
         pendingInit,
@@ -88,6 +100,17 @@ function tryMountView(): void {
 }
 
 host.onExtensionMessage((message: ExtensionToWebviewMessage) => {
+    if (message.type === "sessionHistoryLoading") {
+        if (view !== null) {
+            view.handleMessage(message);
+            return;
+        }
+        pendingSessionHistoryLoading = message.loading;
+        if (message.loading) {
+            bootText.textContent = "Loading conversation...";
+        }
+        return;
+    }
     if (isInitPayload(message)) {
         if (view !== null) {
             return;

@@ -230,6 +230,7 @@ export function createChatStateFromInit(payload: InitPayload): ChatState {
             payload.hideComposerModelControls === true
                 ? false
                 : !hasBootstrapModels,
+        sessionHistoryLoading: payload.sessionHistoryLoading === true,
     };
 }
 

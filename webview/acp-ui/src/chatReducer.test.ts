@@ -237,6 +237,17 @@ describe("chatReducer", () => {
         expect(done.sessionHistoryLoading).toBe(false);
     });
 
+    it("seeds sessionHistoryLoading from init when resuming a runtime session", () => {
+        const state = createChatStateFromInit({
+            type: "init",
+            sessionId: "s1",
+            title: "Chat",
+            sessionHistoryLoading: true,
+        });
+        expect(state.sessionHistoryLoading).toBe(true);
+        expect(state.trace).toEqual([]);
+    });
+
     it("seeds composer state from init cache without loading", () => {
         writeCachedSessionConfigOptions("cursor", [
             {

@@ -126,6 +126,8 @@ export type ExtensionToWebviewMessage =
           sessionConfigOptionsSeed?: AcpUiSessionConfigOption[];
           /** Hides composer model/config controls (standalone demo and screenshots). */
           hideComposerModelControls?: boolean;
+          /** True while ACP `session/load` (or JSONL fallback) is pending at open. */
+          sessionHistoryLoading?: boolean;
       }
     | {
           /** Markdown heading and inline-code colors derived from the active theme. */
