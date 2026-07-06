@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Added `ib-acp-ui.toolCallVerbosity` setting (`verbose` or `compact`) to switch tool calls between full blocks and single-line summaries.
+- Pin the conversation scrollbar to the far right of the chat panel while keeping transcript and composer content centered.
+
 ## 0.3.0 - 2026-07-06
 
 - Added disk-backed `.acp` session files with JSONL event persistence, autosave, and a custom editor.

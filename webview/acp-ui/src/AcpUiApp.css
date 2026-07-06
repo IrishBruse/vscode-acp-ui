@@ -7,10 +7,6 @@
 }
 
 .acp-ui-content-column {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
     width: min(720px, 100%);
     margin-inline: auto;
 }
@@ -50,9 +46,5 @@
 .acp-ui-composer-stack {
     position: relative;
     flex-shrink: 0;
-    width: 100%;
-}
-
-.agent-trace > div {
     width: 100%;
 }

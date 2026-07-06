@@ -590,7 +590,6 @@ export function AcpUiApp({
         onDragOver={onShellDragOver}
         onDrop={onShellDrop}
       >
-        <div className="acp-ui-content-column">
         <main
           ref={traceRef}
           className="agent-trace"
@@ -598,7 +597,7 @@ export function AcpUiApp({
           aria-label="Conversation"
           onScroll={onTraceScroll}
         >
-          <div ref={traceContentRef}>
+          <div ref={traceContentRef} className="acp-ui-content-column">
             {state.sessionHistoryLoading && state.trace.length === 0 ? (
               <SessionHistoryLoader />
             ) : null}
@@ -617,6 +616,7 @@ export function AcpUiApp({
           </div>
         </main>
         <div className="acp-ui-composer-stack">
+          <div className="acp-ui-content-column">
           {permission !== null ? (
             <PermissionDialog
               toolTitle={permission.toolTitle}
@@ -715,7 +715,7 @@ export function AcpUiApp({
             onKeyDown={onComposerKeyDown}
             composerInputRef={composerTextareaRef}
           />
-        </div>
+          </div>
         </div>
       </div>
     </Fragment>
