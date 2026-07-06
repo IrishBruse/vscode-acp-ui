@@ -244,7 +244,14 @@
 .agent-markdown thead th {
     padding-bottom: 6px;
     font-weight: 400;
-    background: none;
+    background-color: var(
+        --vscode-keybindingTable-headerBackground,
+        color-mix(
+            in srgb,
+            var(--vscode-foreground) 6%,
+            var(--vscode-editor-background)
+        )
+    );
 }
 
 /* Match VS Code table/list parity: index 1, 3, 5... (data-parity=odd). */
