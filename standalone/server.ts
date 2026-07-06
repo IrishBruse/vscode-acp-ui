@@ -733,7 +733,7 @@ wss.on("connection", (ws: WebSocket) => {
             return;
         }
 
-        if (parsed.type === "savePromptHistory") {
+        if (parsed.type === "saveHistory") {
             return;
         }
 

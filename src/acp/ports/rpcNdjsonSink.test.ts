@@ -7,14 +7,14 @@ describe("formatAcpRpcNdjsonDebugLine", () => {
         expect(formatAcpRpcNdjsonDebugLine(line)).toBe(line);
     });
 
-    it("prefixes direction and agent name for debug output", () => {
+    it("suffixes direction and agent name for debug output", () => {
         const line = '{"jsonrpc":"2.0","method":"session/prompt","id":2}';
         expect(
             formatAcpRpcNdjsonDebugLine(line, {
                 agentName: "Cursor",
                 direction: "toAgent",
             }),
-        ).toBe(`// Cursor | toAgent | ${line}`);
+        ).toBe(`${line} // Cursor | toAgent`);
     });
 
     it("omits an empty agent name", () => {
@@ -24,6 +24,6 @@ describe("formatAcpRpcNdjsonDebugLine", () => {
                 agentName: "",
                 direction: "fromAgent",
             }),
-        ).toBe(`// fromAgent | ${line}`);
+        ).toBe(`${line} // fromAgent`);
     });
 });

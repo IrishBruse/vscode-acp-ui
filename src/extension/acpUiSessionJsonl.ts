@@ -1,25 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute } from "node:path";
-import {
-    type ExtensionContext,
-    FileType,
-    Range,
-    type TextDocument,
-    Uri,
-    WorkspaceEdit,
-    workspace,
-} from "vscode";
+import { type ExtensionContext, FileType, Uri, workspace } from "vscode";
 import {
     ACP_UI_SESSION_FILE_SUFFIX,
     ACP_UI_SESSION_SCHEMA,
     type AcpUiSessionDocument,
-    type AcpUiSessionHeader,
-    type AcpUiSessionReplayEvent,
-    createDebouncedBatchQueue,
     enqueueSessionFileWrite,
-    immediateFlushSessionEventTypes,
-    normalizePromptHistory,
-    parseSessionFile,
+    normalizeUserMessageHistory,
+    parseSessionDocument,
     serializeSessionDocument,
     sessionFileBaseNameFromTitle,
     uniqueSessionFileBaseNameFromTitle,
@@ -30,31 +18,22 @@ export {
     ACP_UI_SESSION_SCHEMA,
     type AcpUiSessionDocument,
     type AcpUiSessionHeader,
-    type AcpUiSessionReplayEvent,
-    type AcpUiSessionSubmitEvent,
-    createDebouncedBatchQueue,
+    type AcpUiSessionMetadata,
     enqueueSessionFileWrite,
-    immediateFlushSessionEventTypes,
-    isReplayableSessionEvent,
+    normalizeUserMessageHistory,
     parseSessionDocument,
-    parseSessionEventLines,
-    parseSessionEventLinesFromIndex,
     parseSessionFile,
     parseSessionHeaderBlock,
     parseSessionHeaderLine,
     serializeSessionDocument,
-    serializeSessionHeader,
-    serializeSessionRecord,
     sessionFileBaseNameFromTitle,
     shouldDeferJsonlHistoryReplay,
-    shouldPersistExtensionMessage,
     uniqueSessionFileBaseNameFromTitle,
 } from "./acpUiSessionJsonlFormat";
 
 /**
- * Client-owned session files (`acpUi/session/1`) back the chat UI when ACP
- * `session/load` is unavailable or fails.
- * When load succeeds, the log is cleared and agent replay becomes the source of truth.
+ * Client-owned session files (`acpUi/session/1`) store session metadata and
+ * composer user message history only. ACP transcript traffic is not persisted here.
  */
 const sessionsDirectorySettingKey = "ib-acp-ui.sessionsDirectory";
 const chatsSubdir = "chats";
@@ -94,7 +73,6 @@ export function resolveSessionsDirectoryUri(context: ExtensionContext): Uri {
 
 /**
  * Per-session directory under the chats root (`chats/<sessionId>/`).
- * The `.acp` transcript file inside is named from the chat title.
  */
 export function sessionDirectoryUriForId(
     context: ExtensionContext,
@@ -160,9 +138,6 @@ async function resolveSessionFileUriForTitle(
     return Uri.joinPath(dir, fileName);
 }
 
-/**
- * Moves a session file into `chats/<sessionId>/` when it still uses the legacy flat layout.
- */
 async function ensureSessionFileInFolder(
     context: ExtensionContext,
     uri: Uri,
@@ -186,10 +161,6 @@ function sessionFileNamesMatch(current: string, expected: string): boolean {
     return current.toLowerCase() === expected.toLowerCase();
 }
 
-/**
- * Renames a session file when its path does not match the chat title.
- * Returns the URI editors should use (unchanged when already correct).
- */
 export async function ensureSessionFileNameMatchesTitle(
     context: ExtensionContext,
     uri: Uri,
@@ -220,17 +191,18 @@ async function ensureSessionsDirectory(
     return dir;
 }
 
-function buildSessionHeader(
+function buildSessionDocument(
     title: string,
     options?: {
         agentName?: string;
-        promptHistory?: string[];
+        history?: string[];
         runtimeSessionId?: string;
         id?: string;
         createdAt?: number;
     },
-): AcpUiSessionHeader {
+): AcpUiSessionDocument {
     const now = Date.now();
+    const history = normalizeUserMessageHistory(options?.history ?? []);
     return {
         schema: ACP_UI_SESSION_SCHEMA,
         id: options?.id ?? randomUUID(),
@@ -242,264 +214,133 @@ function buildSessionHeader(
         options.runtimeSessionId.length > 0
             ? { runtimeSessionId: options.runtimeSessionId }
             : {}),
-        ...(options?.promptHistory !== undefined &&
-        options.promptHistory.length > 0
-            ? { promptHistory: options.promptHistory }
-            : {}),
+        history,
         createdAt: options?.createdAt ?? now,
         updatedAt: now,
     };
 }
 
-/**
- * Creates a new session file with only a header line.
- */
 export async function createSessionFile(
     context: ExtensionContext,
     title: string,
     options?: {
         agentName?: string;
-        promptHistory?: string[];
+        history?: string[];
         runtimeSessionId?: string;
         id?: string;
         createdAt?: number;
     },
-): Promise<{ id: string; uri: Uri; header: AcpUiSessionHeader }> {
+): Promise<{ id: string; uri: Uri; header: AcpUiSessionDocument }> {
     await ensureSessionsDirectory(context);
-    const header = buildSessionHeader(title, options);
+    const document = buildSessionDocument(title, options);
     const uri = await resolveSessionFileUriForTitle(
         context,
-        header.id,
-        header.title,
+        document.id,
+        document.title,
     );
-    const content = serializeSessionDocument({ ...header, history: [] });
-    await workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
-    return { id: header.id, uri, header };
+    await persistSessionDocument(uri, document);
+    return { id: document.id, uri, header: document };
 }
-
-const sessionFileAppendDebounceMs = 150;
-const sessionFileAppendMaxBatchSize = 48;
-
-const sessionFileAppendQueue = createDebouncedBatchQueue({
-    debounceMs: sessionFileAppendDebounceMs,
-    maxBatchSize: sessionFileAppendMaxBatchSize,
-    onFlush: async (key, batches) => {
-        const events: AcpUiSessionReplayEvent[] = [];
-        for (const item of batches) {
-            try {
-                const parsed = JSON.parse(item) as unknown;
-                if (
-                    parsed !== null &&
-                    typeof parsed === "object" &&
-                    "type" in parsed
-                ) {
-                    events.push(parsed as AcpUiSessionReplayEvent);
-                }
-            } catch {
-                // Skip malformed batch entries.
-            }
-        }
-        await appendSessionHistoryEvents(Uri.parse(key), events);
-    },
-});
 
 async function readSessionDocumentAtUri(
     uri: Uri,
 ): Promise<AcpUiSessionDocument | null> {
-    const doc = await workspace.openTextDocument(uri);
-    const parsed = parseSessionFile(doc.getText());
-    if (parsed.header === null) {
+    try {
+        const bytes = await workspace.fs.readFile(uri);
+        return parseSessionDocument(Buffer.from(bytes).toString("utf8"));
+    } catch {
         return null;
     }
-    return { ...parsed.header, history: parsed.events };
 }
 
-async function writeSessionDocument(
+async function persistSessionDocument(
     uri: Uri,
     document: AcpUiSessionDocument,
 ): Promise<void> {
     const content = serializeSessionDocument(document);
-    await applySessionFileEdit(
-        uri,
-        (edit, doc) => {
-            const fullRange = new Range(
-                doc.positionAt(0),
-                doc.positionAt(doc.getText().length),
-            );
-            edit.replace(uri, fullRange, content);
-        },
-        `Failed to write session document for ${uri.fsPath}`,
-    );
+    await workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
 }
 
-async function appendSessionHistoryEvents(
+async function mutateSessionDocument(
     uri: Uri,
-    events: ReadonlyArray<AcpUiSessionReplayEvent>,
-): Promise<void> {
-    if (events.length === 0) {
-        return;
-    }
-    await enqueueSessionFileWrite(uri.toString(), async () => {
+    apply: (current: AcpUiSessionDocument) => AcpUiSessionDocument,
+): Promise<AcpUiSessionDocument | null> {
+    return enqueueSessionFileWrite(uri.toString(), async () => {
         const current = await readSessionDocumentAtUri(uri);
         if (current === null) {
-            throw new Error(`Missing session document at ${uri.fsPath}`);
+            return null;
         }
-        await writeSessionDocument(uri, {
-            ...current,
-            history: [...current.history, ...events],
-            updatedAt: Date.now(),
-        });
-    });
-}
-
-async function applySessionFileEdit(
-    uri: Uri,
-    apply: (edit: WorkspaceEdit, doc: TextDocument) => void,
-    failureMessage: string,
-): Promise<void> {
-    await enqueueSessionFileWrite(uri.toString(), async () => {
-        const doc = await workspace.openTextDocument(uri);
-        const edit = new WorkspaceEdit();
-        apply(edit, doc);
-        const applied = await workspace.applyEdit(edit);
-        if (!applied) {
-            throw new Error(failureMessage);
-        }
-        await doc.save();
+        const next = apply(current);
+        await persistSessionDocument(uri, next);
+        return next;
     });
 }
 
 /**
- * Flushes any debounced session file appends for `uri`.
+ * Persists composer user message history for a session.
  */
-export async function flushPendingSessionFileWrites(uri: Uri): Promise<void> {
-    await sessionFileAppendQueue.flush(uri.toString());
-}
-
-/**
- * Clears editor-owned chat history, keeping session metadata.
- */
-export async function clearSessionFileLog(
+export async function updateSessionHistory(
     uri: Uri,
-): Promise<AcpUiSessionHeader | null> {
-    await flushPendingSessionFileWrites(uri);
-    const current = await readSessionDocumentAtUri(uri);
-    if (current === null) {
-        return null;
-    }
-    const next: AcpUiSessionDocument = {
+    entries: string[],
+): Promise<AcpUiSessionDocument | null> {
+    const history = normalizeUserMessageHistory(entries);
+    return mutateSessionDocument(uri, (current) => ({
         ...current,
-        history: [],
+        history,
         updatedAt: Date.now(),
-    };
-    await writeSessionDocument(uri, next);
-    const { history: _history, ...header } = next;
-    return header;
+    }));
 }
 
 /**
- * Appends one replay event to the session document `history` array.
- */
-export async function appendSessionEvent(
-    uri: Uri,
-    event: AcpUiSessionReplayEvent,
-): Promise<void> {
-    await sessionFileAppendQueue.enqueue(
-        uri.toString(),
-        JSON.stringify(event),
-        immediateFlushSessionEventTypes.has(event.type),
-    );
-}
-
-/**
- * Appends many replay events in one batched write.
- */
-export async function appendSessionEvents(
-    uri: Uri,
-    events: ReadonlyArray<AcpUiSessionReplayEvent>,
-): Promise<void> {
-    if (events.length === 0) {
-        return;
-    }
-    const payloads = events.map((event) => JSON.stringify(event));
-    await sessionFileAppendQueue.enqueueMany(uri.toString(), payloads, true);
-}
-
-/**
- * Replaces line 1 with an updated header.
+ * Updates session metadata while preserving user message history.
  */
 export async function updateSessionHeader(
     uri: Uri,
     patch: Partial<
         Pick<
-            AcpUiSessionHeader,
-            | "title"
-            | "agentName"
-            | "runtimeSessionId"
-            | "promptHistory"
-            | "updatedAt"
+            AcpUiSessionDocument,
+            "title" | "agentName" | "runtimeSessionId" | "history" | "updatedAt"
         >
     >,
-): Promise<AcpUiSessionHeader | null> {
-    await flushPendingSessionFileWrites(uri);
-    const current = await readSessionDocumentAtUri(uri);
-    if (current === null) {
-        return null;
-    }
-    const next: AcpUiSessionDocument = {
-        ...current,
-        ...(patch.title !== undefined ? { title: patch.title.trim() } : {}),
-        ...(patch.agentName !== undefined
-            ? patch.agentName.length > 0
-                ? { agentName: patch.agentName }
-                : {}
-            : {}),
-        ...(patch.runtimeSessionId !== undefined
-            ? patch.runtimeSessionId.length > 0
-                ? { runtimeSessionId: patch.runtimeSessionId }
-                : {}
-            : {}),
-        ...(patch.promptHistory !== undefined
-            ? patch.promptHistory.length > 0
-                ? {
-                      promptHistory: normalizePromptHistory(
-                          patch.promptHistory,
-                      ),
-                  }
-                : { promptHistory: undefined }
-            : {}),
-        updatedAt: patch.updatedAt ?? Date.now(),
-    };
-    if (
-        patch.agentName !== undefined &&
-        patch.agentName.length === 0 &&
-        next.agentName !== undefined
-    ) {
-        delete next.agentName;
-    }
-    if (
-        patch.runtimeSessionId !== undefined &&
-        patch.runtimeSessionId.length === 0 &&
-        next.runtimeSessionId !== undefined
-    ) {
-        delete next.runtimeSessionId;
-    }
-    if (
-        patch.promptHistory !== undefined &&
-        (patch.promptHistory.length === 0 || next.promptHistory === undefined)
-    ) {
-        delete next.promptHistory;
-    }
-    await writeSessionDocument(uri, next);
-    const { history: _history, ...header } = next;
-    return header;
+): Promise<AcpUiSessionDocument | null> {
+    return mutateSessionDocument(uri, (current) => {
+        const next: AcpUiSessionDocument = {
+            ...current,
+            ...(patch.title !== undefined ? { title: patch.title.trim() } : {}),
+            ...(patch.agentName !== undefined
+                ? patch.agentName.length > 0
+                    ? { agentName: patch.agentName }
+                    : {}
+                : {}),
+            ...(patch.runtimeSessionId !== undefined
+                ? patch.runtimeSessionId.length > 0
+                    ? { runtimeSessionId: patch.runtimeSessionId }
+                    : {}
+                : {}),
+            ...(patch.history !== undefined
+                ? { history: normalizeUserMessageHistory(patch.history) }
+                : {}),
+            updatedAt: patch.updatedAt ?? Date.now(),
+        };
+        if (
+            patch.agentName !== undefined &&
+            patch.agentName.length === 0 &&
+            next.agentName !== undefined
+        ) {
+            delete next.agentName;
+        }
+        if (
+            patch.runtimeSessionId !== undefined &&
+            patch.runtimeSessionId.length === 0 &&
+            next.runtimeSessionId !== undefined
+        ) {
+            delete next.runtimeSessionId;
+        }
+        return next;
+    });
 }
 
-/**
- * Deletes a session file from disk.
- */
 export async function deleteSessionFile(uri: Uri): Promise<void> {
-    await flushPendingSessionFileWrites(uri);
     const sessionDir = Uri.joinPath(uri, "..");
     try {
         await workspace.fs.delete(sessionDir, {
@@ -517,29 +358,24 @@ export async function deleteSessionFile(uri: Uri): Promise<void> {
 
 async function readSessionHeaderAtUri(
     uri: Uri,
-): Promise<{ header: AcpUiSessionHeader; uri: Uri } | null> {
-    try {
-        const bytes = await workspace.fs.readFile(uri);
-        const parsed = parseSessionFile(Buffer.from(bytes).toString("utf8"));
-        if (parsed.header !== null) {
-            return { header: parsed.header, uri };
-        }
-    } catch {
-        // Skip unreadable files.
+): Promise<{ header: AcpUiSessionDocument; uri: Uri } | null> {
+    const document = await readSessionDocumentAtUri(uri);
+    if (document !== null) {
+        return { header: document, uri };
     }
     return null;
 }
 
 async function listSessionHeadersInDirectory(
     dir: Uri,
-): Promise<Array<{ header: AcpUiSessionHeader; uri: Uri }>> {
+): Promise<Array<{ header: AcpUiSessionDocument; uri: Uri }>> {
     let entries: [string, FileType][];
     try {
         entries = await workspace.fs.readDirectory(dir);
     } catch {
         return [];
     }
-    const out: Array<{ header: AcpUiSessionHeader; uri: Uri }> = [];
+    const out: Array<{ header: AcpUiSessionDocument; uri: Uri }> = [];
     for (const [name, fileType] of entries) {
         if (
             fileType === FileType.File &&
@@ -579,9 +415,6 @@ async function listSessionHeadersInDirectory(
     return out;
 }
 
-/**
- * Moves legacy flat `chats/*.acp` files into `chats/<sessionId>/<title>.acp`.
- */
 export async function migrateFlatSessionFilesToFolderLayout(
     context: ExtensionContext,
 ): Promise<void> {
@@ -629,12 +462,9 @@ export async function migrateFlatSessionFilesToFolderLayout(
     await context.globalState.update(folderLayoutMigrationKey, true);
 }
 
-/**
- * Lists session headers by scanning the sessions directory.
- */
 export async function listSessionHeaders(
     context: ExtensionContext,
-): Promise<Array<{ header: AcpUiSessionHeader; uri: Uri }>> {
+): Promise<Array<{ header: AcpUiSessionDocument; uri: Uri }>> {
     const dir = resolveSessionsDirectoryUri(context);
     try {
         await workspace.fs.createDirectory(dir);

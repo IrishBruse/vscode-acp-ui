@@ -32,7 +32,7 @@ export function activateAcpUiExtension(
             },
         ),
     );
-    const outputChannel = window.createOutputChannel("ACP UI RPC", "json");
+    const outputChannel = window.createOutputChannel("ACP UI RPC", "jsonl");
     const rpcNdjsonSink = new VscodeAcpRpcNdjsonSink(outputChannel, null);
     context.subscriptions.push(outputChannel);
     context.subscriptions.push(new Disposable(() => rpcNdjsonSink.dispose()));

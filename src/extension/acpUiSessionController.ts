@@ -22,37 +22,24 @@ import {
     getAcpAgentConfigsFromSettings,
 } from "../acp/config/vscodeSettingsAgents";
 import { AcpSessionBridge } from "../acp/session/acpSessionBridge";
-import {
-    readCachedComposerSeed,
-    sessionConfigOptionsInReplayEvents,
-} from "../acp/session/sessionConfigOptionsCache";
+import { readCachedComposerSeed } from "../acp/session/sessionConfigOptionsCache";
 import { openWorkspacePathTarget } from "../platform/openWorkspacePathTarget";
 import { formatPathWithTilde } from "../platform/pathDisplay";
 import { resolveUserHomeDir } from "../platform/resolveUserHomeDir";
 import { resolveWorkspacePath } from "../platform/resolveWorkspacePath";
 import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";
 import { resolveMarkdownThemeVariables } from "../platform/vscode/resolveMarkdownThemeVariables";
-import type {
-    AcpUiHistoryReplayEvent,
-    ExtensionToWebviewMessage,
-} from "../protocol/extensionHostMessages";
+import type { ExtensionToWebviewMessage } from "../protocol/extensionHostMessages";
 import { tryParseWebviewMessage } from "../protocol/extensionHostMessages";
 import {
     moveAcpUiCustomEditorUri,
     setAcpUiCustomEditorTabTitle,
 } from "./acpUiCustomEditorProvider";
 import {
-    type AcpUiSessionHeader,
-    type AcpUiSessionReplayEvent,
-    type AcpUiSessionSubmitEvent,
-    appendSessionEvent,
-    appendSessionEvents,
-    clearSessionFileLog,
-    flushPendingSessionFileWrites,
+    type AcpUiSessionDocument,
     parseSessionFile,
     shouldDeferJsonlHistoryReplay,
-    shouldPersistExtensionMessage,
-    updateSessionHeader,
+    updateSessionHistory,
 } from "./acpUiSessionJsonl";
 import {
     clearAcpUiSessionRuntimeSessionId,
@@ -60,6 +47,7 @@ import {
     renameAcpUiSession,
     setAcpUiSessionAgentName,
     setAcpUiSessionRuntimeSessionId,
+    updateAcpUiSessionTitle,
 } from "./acpUiSessionsStore";
 import { getAcpUiExtensionActivation } from "./extensionServices";
 
@@ -73,7 +61,7 @@ type SessionControllerOptions = {
 };
 
 /**
- * Bridges one open session editor webview to an ACP agent and the session JSONL file.
+ * Bridges one open session editor webview to an ACP agent and the session `.acp` file.
  */
 export class AcpUiSessionController {
     private readonly sessionId: string;
@@ -83,18 +71,13 @@ export class AcpUiSessionController {
         | undefined;
     private agentConfig: AcpAgentConfig | undefined;
     private pendingModelId: string | undefined;
-    private replayedEventCount = 0;
-    private documentReplayDepth = 0;
-    private deferredJsonlReplayAtBootstrap = false;
-    private savedJsonlEventsForLoadFallback: AcpUiSessionReplayEvent[] = [];
     private agentLoadInProgress = false;
-    private agentLoadClearedJsonl = false;
     private readonly disposables: Array<{ dispose(): void }> = [];
 
     constructor(private readonly options: SessionControllerOptions) {
         const parsed = parseSessionFile(options.document.getText());
         if (parsed.header === null) {
-            throw new Error("Session file is missing a valid header line.");
+            throw new Error("Session file is missing a valid header.");
         }
         this.sessionId = parsed.header.id;
         const configs = getAcpAgentConfigsFromSettings();
@@ -103,7 +86,6 @@ export class AcpUiSessionController {
             named !== undefined
                 ? (getAcpAgentConfigByName(named) ?? configs[0])
                 : configs[0];
-        this.replayedEventCount = parsed.events.length;
     }
 
     private get documentUri(): Uri {
@@ -111,17 +93,6 @@ export class AcpUiSessionController {
     }
 
     activate(): void {
-        this.disposables.push(
-            workspace.onDidChangeTextDocument((event) => {
-                if (
-                    event.document.uri.toString() !==
-                    this.documentUri.toString()
-                ) {
-                    return;
-                }
-                this.replayDocumentDelta(event.document);
-            }),
-        );
         this.disposables.push(
             this.options.webview.onDidReceiveMessage((message: unknown) => {
                 void this.handleWebviewMessage(message);
@@ -156,7 +127,6 @@ export class AcpUiSessionController {
     }
 
     dispose(): void {
-        void flushPendingSessionFileWrites(this.documentUri);
         this.disposeBridge();
         for (const disposable of this.disposables) {
             disposable.dispose();
@@ -164,29 +134,15 @@ export class AcpUiSessionController {
         this.disposables.length = 0;
     }
 
-    async sendBootstrapMessages(header: AcpUiSessionHeader): Promise<void> {
-        const parsed = parseSessionFile(this.options.document.getText());
-        this.deferredJsonlReplayAtBootstrap =
-            shouldDeferJsonlHistoryReplay(header);
-        if (this.deferredJsonlReplayAtBootstrap) {
+    async sendBootstrapMessages(header: AcpUiSessionDocument): Promise<void> {
+        if (shouldDeferJsonlHistoryReplay(header)) {
             this.agentLoadInProgress = true;
-            this.postLive({ type: "sessionHistoryLoading", loading: true });
-        }
-        if (parsed.events.length > 0 && !this.deferredJsonlReplayAtBootstrap) {
-            this.post({
-                type: "historyReplay",
-                events: parsed.events as AcpUiHistoryReplayEvent[],
-            });
+            this.post({ type: "sessionHistoryLoading", loading: true });
         }
         const initPayload = await this.buildInitPayload(header);
         this.post({ type: "init", ...initPayload });
         void this.postMarkdownThemeVariables();
-        if (
-            !sessionConfigOptionsInReplayEvents(parsed.events) &&
-            this.agentConfig !== undefined
-        ) {
-            this.postSessionConfigSeedOrLoading();
-        }
+        this.postSessionConfigSeedOrLoading();
         void this.ensureBridgeConnected();
     }
 
@@ -195,7 +151,7 @@ export class AcpUiSessionController {
         if (Object.keys(variables).length === 0) {
             return;
         }
-        this.postLive({ type: "vscodeThemeVariables", variables });
+        this.post({ type: "vscodeThemeVariables", variables });
     }
 
     private postSessionConfigSeedOrLoading(): void {
@@ -218,7 +174,7 @@ export class AcpUiSessionController {
     }
 
     private async buildInitPayload(
-        header: AcpUiSessionHeader,
+        header: AcpUiSessionDocument,
     ): Promise<
         Omit<Extract<ExtensionToWebviewMessage, { type: "init" }>, "type">
     > {
@@ -261,10 +217,7 @@ export class AcpUiSessionController {
             ...(availableNames.length > 0
                 ? { availableAcpAgents: availableNames }
                 : {}),
-            ...(header.promptHistory !== undefined &&
-            header.promptHistory.length > 0
-                ? { promptHistory: header.promptHistory }
-                : {}),
+            ...(header.history.length > 0 ? { history: header.history } : {}),
             ...(cachedSeed.configOptions !== null
                 ? { sessionConfigOptionsSeed: cachedSeed.configOptions }
                 : {}),
@@ -277,132 +230,21 @@ export class AcpUiSessionController {
     }
 
     private postToolCallVerbosity(): void {
-        this.postLive({
+        this.post({
             type: "toolCallVerbosity",
             verbosity: readToolCallVerbosityFromSettings(),
         });
     }
 
     private postContentWidthRatio(): void {
-        this.postLive({
+        this.post({
             type: "contentWidthRatio",
             ratio: readContentWidthRatioFromSettings(),
         });
     }
 
-    private replayDocumentDelta(document: TextDocument): void {
-        const parsed = parseSessionFile(document.getText());
-        const events = parsed.events;
-        if (events.length <= this.replayedEventCount) {
-            if (events.length < this.replayedEventCount) {
-                this.replayedEventCount = events.length;
-            }
-            return;
-        }
-        const delta = events.slice(this.replayedEventCount);
-        this.replayedEventCount = events.length;
-        if (this.documentReplayDepth > 0) {
-            return;
-        }
-        for (const event of delta) {
-            if (event.type === "submit") {
-                continue;
-            }
-            this.postLive(event);
-        }
-    }
-
-    private replayJsonlEventsToWebview(
-        events: ReadonlyArray<AcpUiSessionReplayEvent>,
-    ): void {
-        for (const event of events) {
-            this.postLive(event as ExtensionToWebviewMessage);
-        }
-    }
-
-    private async restoreJsonlEvents(
-        events: ReadonlyArray<AcpUiSessionReplayEvent>,
-    ): Promise<void> {
-        this.documentReplayDepth += 1;
-        try {
-            await appendSessionEvents(this.documentUri, events);
-            this.replayedEventCount = events.length;
-        } catch (err: unknown) {
-            const detail = err instanceof Error ? err.message : String(err);
-            console.warn(
-                `[ACP UI] Failed to restore session log after load failure: ${detail}`,
-            );
-        } finally {
-            this.documentReplayDepth -= 1;
-        }
-    }
-
-    private async replayDeferredJsonlAfterConnect(): Promise<void> {
-        if (!this.deferredJsonlReplayAtBootstrap) {
-            return;
-        }
-        if (this.agentLoadClearedJsonl) {
-            return;
-        }
-        const events =
-            this.savedJsonlEventsForLoadFallback.length > 0
-                ? this.savedJsonlEventsForLoadFallback
-                : parseSessionFile(this.options.document.getText()).events;
-        if (events.length > 0) {
-            this.replayJsonlEventsToWebview(events);
-        }
-    }
-
-    private postLive(message: ExtensionToWebviewMessage): void {
-        if (message.type === "init" || message.type === "historyReplay") {
-            return;
-        }
-        void this.options.webview.postMessage(message);
-    }
-
     private post(message: ExtensionToWebviewMessage): void {
         void this.options.webview.postMessage(message);
-        void this.persistOutbound(message);
-    }
-
-    private async persistOutbound(
-        message: ExtensionToWebviewMessage,
-    ): Promise<void> {
-        if (!shouldPersistExtensionMessage(message)) {
-            return;
-        }
-        this.documentReplayDepth += 1;
-        try {
-            await appendSessionEvent(
-                this.documentUri,
-                message as Exclude<
-                    AcpUiSessionReplayEvent,
-                    AcpUiSessionSubmitEvent
-                >,
-            );
-        } catch (err: unknown) {
-            const detail = err instanceof Error ? err.message : String(err);
-            console.warn(
-                `[ACP UI] Failed to persist session event (${message.type}): ${detail}`,
-            );
-        } finally {
-            this.documentReplayDepth -= 1;
-        }
-    }
-
-    private async persistSubmit(body: string): Promise<void> {
-        this.documentReplayDepth += 1;
-        try {
-            await appendSessionEvent(this.documentUri, {
-                type: "submit",
-                body,
-            });
-        } catch (err: unknown) {
-            const detail = err instanceof Error ? err.message : String(err);
-            console.warn(`[ACP UI] Failed to persist submit event: ${detail}`);
-        } finally {
-            this.documentReplayDepth -= 1;
-        }
     }
 
     private async applySessionInfoUpdate(update: {
@@ -413,15 +255,12 @@ export class AcpUiSessionController {
             return;
         }
         const nextTitle = title.trim();
-        const before = getAcpUiSession(this.sessionId);
-        const oldUri = before?.uri;
-        const renamed = await renameAcpUiSession(this.sessionId, nextTitle);
-        if (renamed) {
-            const record = getAcpUiSession(this.sessionId);
-            if (record !== undefined && oldUri !== undefined) {
-                moveAcpUiCustomEditorUri(oldUri, record.uri);
-                setAcpUiCustomEditorTabTitle(record.uri, nextTitle);
-            }
+        const updated = await updateAcpUiSessionTitle(
+            this.sessionId,
+            nextTitle,
+        );
+        if (updated) {
+            setAcpUiCustomEditorTabTitle(this.documentUri, nextTitle);
             this.options.refreshChatsList?.();
         }
     }
@@ -470,9 +309,7 @@ export class AcpUiSessionController {
                 onSessionInfoUpdate: (update) => {
                     void this.applySessionInfoUpdate(update);
                 },
-                onResumeSession: () => this.prepareSessionFileForResume(),
-                onLoadSessionFailed: () =>
-                    this.restoreSessionFileAfterLoadFailure(),
+                onResumeSession: () => this.beginAgentHistoryLoad(),
             },
         );
         this.bridge = bridge;
@@ -495,24 +332,10 @@ export class AcpUiSessionController {
                     connectedSessionId,
                 );
             }
-            await this.replayDeferredJsonlAfterConnect();
-            this.deferredJsonlReplayAtBootstrap = false;
-            this.savedJsonlEventsForLoadFallback = [];
-            this.agentLoadClearedJsonl = false;
             this.options.refreshChatsList?.();
             return bridge;
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            if (this.savedJsonlEventsForLoadFallback.length > 0) {
-                this.replayJsonlEventsToWebview(
-                    this.savedJsonlEventsForLoadFallback,
-                );
-                await this.restoreJsonlEvents(
-                    this.savedJsonlEventsForLoadFallback,
-                );
-                this.savedJsonlEventsForLoadFallback = [];
-            }
-            this.deferredJsonlReplayAtBootstrap = false;
             window.showErrorMessage(`Failed to connect to agent: ${message}`);
             this.post({
                 type: "error",
@@ -523,42 +346,15 @@ export class AcpUiSessionController {
             return undefined;
         } finally {
             if (this.agentLoadInProgress) {
-                this.postLive({
-                    type: "sessionHistoryLoading",
-                    loading: false,
-                });
+                this.post({ type: "sessionHistoryLoading", loading: false });
                 this.agentLoadInProgress = false;
             }
         }
     }
 
-    private async prepareSessionFileForResume(): Promise<void> {
-        const parsed = parseSessionFile(this.options.document.getText());
-        this.savedJsonlEventsForLoadFallback = [...parsed.events];
-        this.agentLoadClearedJsonl = true;
+    private beginAgentHistoryLoad(): void {
         this.agentLoadInProgress = true;
-        this.postLive({ type: "sessionHistoryLoading", loading: true });
-        this.documentReplayDepth += 1;
-        try {
-            await clearSessionFileLog(this.documentUri);
-            this.replayedEventCount = 0;
-        } catch (err: unknown) {
-            const detail = err instanceof Error ? err.message : String(err);
-            console.warn(
-                `[ACP UI] Failed to clear session log before resume: ${detail}`,
-            );
-        } finally {
-            this.documentReplayDepth -= 1;
-        }
-    }
-
-    private async restoreSessionFileAfterLoadFailure(): Promise<void> {
-        if (this.savedJsonlEventsForLoadFallback.length === 0) {
-            this.agentLoadClearedJsonl = false;
-            return;
-        }
-        await this.restoreJsonlEvents(this.savedJsonlEventsForLoadFallback);
-        this.agentLoadClearedJsonl = false;
+        this.post({ type: "sessionHistoryLoading", loading: true });
     }
 
     private async handleWebviewMessage(message: unknown): Promise<void> {
@@ -602,33 +398,19 @@ export class AcpUiSessionController {
         if (parsed.type === "resetSession") {
             this.disposeBridge();
             this.pendingModelId = undefined;
-            this.deferredJsonlReplayAtBootstrap = false;
-            this.savedJsonlEventsForLoadFallback = [];
-            this.agentLoadClearedJsonl = false;
             void clearAcpUiSessionRuntimeSessionId(this.sessionId);
-            this.documentReplayDepth += 1;
-            try {
-                await appendSessionEvent(this.documentUri, {
-                    type: "sessionReset",
-                });
-            } finally {
-                this.documentReplayDepth -= 1;
-            }
-            this.postLive({ type: "sessionReset" });
+            this.post({ type: "sessionReset" });
             this.postSessionConfigSeedOrLoading();
             void this.ensureBridgeConnected();
             return;
         }
 
-        if (parsed.type === "savePromptHistory") {
-            void updateSessionHeader(this.documentUri, {
-                promptHistory: parsed.entries,
-            });
+        if (parsed.type === "saveHistory") {
+            void updateSessionHistory(this.documentUri, parsed.entries);
             return;
         }
 
         if (parsed.type === "send") {
-            await this.persistSubmit(parsed.body);
             void (async () => {
                 const b = await this.ensureBridgeConnected();
                 if (b !== undefined) {

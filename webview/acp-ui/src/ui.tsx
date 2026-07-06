@@ -26,7 +26,7 @@ export function mountChatView(
         configId: string,
         value: string | boolean,
     ) => void,
-    postSavePromptHistory: (entries: string[]) => void,
+    postSaveHistory: (entries: string[]) => void,
     postPermissionResponse: (
         payload:
             | { requestId: string; selectedOptionId: string }
@@ -77,7 +77,7 @@ export function mountChatView(
             postResetSession={postResetSession}
             postSetSessionModel={postSetSessionModel}
             postSetSessionConfigOption={postSetSessionConfigOption}
-            postSavePromptHistory={postSavePromptHistory}
+            postSaveHistory={postSaveHistory}
             postOpenNewChat={postOpenNewChat}
             postOpenWorkspacePath={postOpenWorkspacePath}
             postPermissionResponse={postPermissionResponse}

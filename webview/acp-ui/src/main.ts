@@ -85,7 +85,7 @@ function tryMountView(): void {
             host.post({ type: "setSessionConfigOption", configId, value });
         },
         (entries) => {
-            host.post({ type: "savePromptHistory", entries });
+            host.post({ type: "saveHistory", entries });
         },
         (payload) => {
             host.post({ type: "permissionResponse", ...payload });

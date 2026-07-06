@@ -14,6 +14,7 @@ const rpcNdjsonDebugFieldSeparator = " | ";
 
 /**
  * Formats one NDJSON-RPC line for extension debug output.
+ * JSON payload first so the channel can use jsonl highlighting; metadata trails after `//`.
  */
 export function formatAcpRpcNdjsonDebugLine(
     line: string,
@@ -22,14 +23,13 @@ export function formatAcpRpcNdjsonDebugLine(
     if (context === undefined) {
         return line;
     }
-    const fields = [
+    const meta = [
         ...(context.agentName !== undefined && context.agentName.length > 0
             ? [context.agentName]
             : []),
         context.direction,
-        line,
-    ];
-    return `// ${fields.join(rpcNdjsonDebugFieldSeparator)}`;
+    ].join(rpcNdjsonDebugFieldSeparator);
+    return `${line} // ${meta}`;
 }
 
 export interface AcpRpcNdjsonSink {

@@ -47,17 +47,17 @@ function mountStandaloneDevNav(): void {
     document.body.appendChild(link);
 }
 
-function standalonePromptStorageKey(
+function standaloneHistoryStorageKey(
     workspaceLabel: string | undefined,
 ): string {
     const base =
         workspaceLabel !== undefined && workspaceLabel.trim().length > 0
             ? workspaceLabel.trim()
             : "default";
-    return `ib-acp-ui.standalone.promptHistory:${base}`;
+    return `ib-acp-ui.standalone.history:${base}`;
 }
 
-function loadStandalonePromptHistory(
+function loadStandaloneHistory(
     workspaceLabel: string | undefined,
 ): string[] | undefined {
     try {
@@ -65,7 +65,12 @@ function loadStandalonePromptHistory(
         if (storage === undefined) {
             return undefined;
         }
-        const raw = storage.getItem(standalonePromptStorageKey(workspaceLabel));
+        const key = standaloneHistoryStorageKey(workspaceLabel);
+        const raw =
+            storage.getItem(key) ??
+            storage.getItem(
+                `ib-acp-ui.standalone.promptHistory:${workspaceLabel !== undefined && workspaceLabel.trim().length > 0 ? workspaceLabel.trim() : "default"}`,
+            );
         if (raw === null || raw.length === 0) {
             return undefined;
         }
@@ -82,7 +87,7 @@ function loadStandalonePromptHistory(
     }
 }
 
-function saveStandalonePromptHistory(
+function saveStandaloneHistory(
     workspaceLabel: string | undefined,
     entries: string[],
 ): void {
@@ -92,7 +97,7 @@ function saveStandalonePromptHistory(
             return;
         }
         storage.setItem(
-            standalonePromptStorageKey(workspaceLabel),
+            standaloneHistoryStorageKey(workspaceLabel),
             JSON.stringify(entries),
         );
     } catch {
@@ -169,10 +174,10 @@ async function bootstrap(): Promise<void> {
                 setCompactToolPathHome(message.homeDir);
             }
             const workspaceLabel = message.workspaceLabel;
-            const restored = loadStandalonePromptHistory(workspaceLabel);
+            const restored = loadStandaloneHistory(workspaceLabel);
             const initPayload: InitPayload =
                 restored !== undefined && restored.length > 0
-                    ? { ...message, promptHistory: restored }
+                    ? { ...message, history: restored }
                     : message;
             view = mountChatView(
                 root,
@@ -200,8 +205,8 @@ async function bootstrap(): Promise<void> {
                     });
                 },
                 (entries) => {
-                    saveStandalonePromptHistory(workspaceLabel, entries);
-                    host.post({ type: "savePromptHistory", entries });
+                    saveStandaloneHistory(workspaceLabel, entries);
+                    host.post({ type: "saveHistory", entries });
                 },
                 (payload) => {
                     host.post({ type: "permissionResponse", ...payload });

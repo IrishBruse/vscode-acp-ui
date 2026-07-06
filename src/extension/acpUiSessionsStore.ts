@@ -107,8 +107,7 @@ async function migrateLegacyStorageIfNeeded(): Promise<void> {
                 id: row.id,
                 agentName: row.agentName,
                 runtimeSessionId: row.sessionId,
-                promptHistory:
-                    promptHistory.length > 0 ? promptHistory : undefined,
+                history: promptHistory,
                 createdAt: row.updatedAt,
             });
         } catch {
@@ -325,6 +324,28 @@ export function touchAcpUiSession(id: string): void {
         return;
     }
     row.updatedAt = Date.now();
+}
+
+/**
+ * Updates session title in the `.acp` header only (no on-disk file rename).
+ * Use for agent-driven `session_info_update` while a chat editor is open.
+ */
+export async function updateAcpUiSessionTitle(
+    id: string,
+    nextTitle: string,
+): Promise<boolean> {
+    const row = sessions.find((s) => s.id === id);
+    const title = nextTitle.trim();
+    if (row === undefined || title.length === 0) {
+        return false;
+    }
+    if (row.title === title) {
+        return true;
+    }
+    row.title = title;
+    row.updatedAt = Date.now();
+    await updateSessionHeader(row.uri, { title, updatedAt: row.updatedAt });
+    return true;
 }
 
 /**

@@ -99,8 +99,8 @@ export type WebviewToExtensionMessage =
               | { outcome: "rejected"; reason?: string }
               | { outcome: "cancelled" };
       }
-    /** Persists composer Arrow Up / Down prompt history for this session. */
-    | { type: "savePromptHistory"; entries: string[] }
+    /** Persists composer Arrow Up / Down user message history for this session. */
+    | { type: "saveHistory"; entries: string[] }
     /** Open a new chat with the default agent (extension host handles creation). */
     | { type: "openNewChat" }
     /** Open a workspace path from a compact tool link (`auto` reveals folders, opens files). */
@@ -130,7 +130,7 @@ export type ExtensionToWebviewMessage =
           /** Optional `--vscode-*` overrides applied on `document.documentElement`. */
           vscodeThemeVariables?: Record<string, string>;
           sessionModels?: AcpUiSessionModelSelection;
-          promptHistory?: string[];
+          history?: string[];
           /**
            * When true, the agent picker is read-only (agent was chosen when the chat was created).
            * The model picker may still change until the first user message in standalone mode.
@@ -140,7 +140,7 @@ export type ExtensionToWebviewMessage =
           sessionConfigOptionsSeed?: AcpUiSessionConfigOption[];
           /** Hides composer model/config controls (standalone demo and screenshots). */
           hideComposerModelControls?: boolean;
-          /** True while ACP `session/load` (or JSONL fallback) is pending at open. */
+          /** True while ACP `session/load` replays conversation history. */
           sessionHistoryLoading?: boolean;
           /** Tool call display mode (`minimal`, `compact`, or `verbose`). */
           toolCallVerbosity?: ToolCallVerbosity;
@@ -397,7 +397,7 @@ export function tryParseWebviewMessage(
             >["outcome"],
         };
     }
-    if (messageType === "savePromptHistory" && Array.isArray(record.entries)) {
+    if (messageType === "saveHistory" && Array.isArray(record.entries)) {
         const entries: string[] = [];
         for (const item of record.entries) {
             if (typeof item !== "string") {
@@ -408,7 +408,7 @@ export function tryParseWebviewMessage(
                 break;
             }
         }
-        return { type: "savePromptHistory", entries };
+        return { type: "saveHistory", entries };
     }
     if (messageType === "openNewChat") {
         return { type: "openNewChat" };

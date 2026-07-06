@@ -67,7 +67,7 @@ export type AcpUiAppProps = {
     configId: string,
     value: string | boolean,
   ) => void;
-  postSavePromptHistory: (entries: string[]) => void;
+  postSaveHistory: (entries: string[]) => void;
   postOpenNewChat?: () => void;
   postOpenWorkspacePath?: (
     path: string,
@@ -112,7 +112,7 @@ export function AcpUiApp({
   postResetSession,
   postSetSessionModel,
   postSetSessionConfigOption,
-  postSavePromptHistory,
+  postSaveHistory,
   postOpenNewChat,
   postOpenWorkspacePath,
   postPermissionResponse,
@@ -127,10 +127,8 @@ export function AcpUiApp({
       replayed ?? createChatStateFromInit(initPayload),
   );
   const [draft, setDraft] = useState("");
-  const [promptHistory, setPromptHistory] = useState<string[]>(
-    init.promptHistory ?? [],
-  );
-  const [promptHistoryBrowse, setPromptHistoryBrowse] = useState<{
+  const [history, setHistory] = useState<string[]>(init.history ?? []);
+  const [historyBrowse, setHistoryBrowse] = useState<{
     pointer: number;
     restore: string;
   } | null>(null);
@@ -311,7 +309,7 @@ export function AcpUiApp({
 
   const onDraftChange = useCallback((value: string): void => {
     setDraft(value);
-    setPromptHistoryBrowse((browse) => (browse !== null ? null : browse));
+    setHistoryBrowse((browse) => (browse !== null ? null : browse));
     setComposerSuggestionIndex(0);
     setComposerAutocompleteDismissed(false);
   }, []);
@@ -327,7 +325,7 @@ export function AcpUiApp({
     const asCommand = body.toLowerCase();
     if (asCommand === "/clear" || asCommand === "/new") {
       setDraft("");
-      setPromptHistoryBrowse(null);
+      setHistoryBrowse(null);
       stickToBottomRef.current = true;
       dispatch({ type: "sessionReset" });
       postResetSession();
@@ -335,7 +333,7 @@ export function AcpUiApp({
     }
     if (asCommand === "/show-thinking") {
       setDraft("");
-      setPromptHistoryBrowse(null);
+      setHistoryBrowse(null);
       setShowThinkingBlocks((value) => !value);
       dispatch({
         type: "commandFeedback",
@@ -356,18 +354,18 @@ export function AcpUiApp({
       }
       const nextTitle = match[1]!;
       setDraft("");
-      setPromptHistoryBrowse(null);
+      setHistoryBrowse(null);
       postRenameSession(nextTitle);
       return;
     }
     setDraft("");
-    setPromptHistoryBrowse(null);
-    setPromptHistory((prev) => {
+    setHistoryBrowse(null);
+    setHistory((prev) => {
       const next =
         prev.length > 0 && prev[prev.length - 1] === body
           ? prev
           : [...prev.slice(-49), body];
-      postSavePromptHistory(next);
+      postSaveHistory(next);
       return next;
     });
     stickToBottomRef.current = true;
@@ -473,7 +471,7 @@ export function AcpUiApp({
           const nextDraft =
             draft.slice(0, tokenStart) + selected.insertText + right.slice(consumed.length);
           setDraft(nextDraft);
-          setPromptHistoryBrowse(null);
+          setHistoryBrowse(null);
           setComposerSuggestionIndex(0);
           return;
         }
@@ -481,42 +479,42 @@ export function AcpUiApp({
     }
 
     if (event.key === "ArrowUp" && !mod) {
-      if (promptHistoryBrowse !== null) {
+      if (historyBrowse !== null) {
         event.preventDefault();
-        if (promptHistoryBrowse.pointer > 0) {
-          const nextPointer = promptHistoryBrowse.pointer - 1;
-          setPromptHistoryBrowse({
+        if (historyBrowse.pointer > 0) {
+          const nextPointer = historyBrowse.pointer - 1;
+          setHistoryBrowse({
             pointer: nextPointer,
-            restore: promptHistoryBrowse.restore,
+            restore: historyBrowse.restore,
           });
-          setDraft(promptHistory[nextPointer] ?? "");
+          setDraft(history[nextPointer] ?? "");
         }
         return;
       }
       if (
-        promptHistory.length > 0 &&
+        history.length > 0 &&
         textareaAtFirstLineFirstColumn(start, end)
       ) {
         event.preventDefault();
-        const lastIdx = promptHistory.length - 1;
-        setPromptHistoryBrowse({ pointer: lastIdx, restore: draft });
-        setDraft(promptHistory[lastIdx] ?? "");
+        const lastIdx = history.length - 1;
+        setHistoryBrowse({ pointer: lastIdx, restore: draft });
+        setDraft(history[lastIdx] ?? "");
         return;
       }
     }
 
-    if (event.key === "ArrowDown" && !mod && promptHistoryBrowse !== null) {
+    if (event.key === "ArrowDown" && !mod && historyBrowse !== null) {
       event.preventDefault();
-      if (promptHistoryBrowse.pointer < promptHistory.length - 1) {
-        const nextPointer = promptHistoryBrowse.pointer + 1;
-        setPromptHistoryBrowse({
+      if (historyBrowse.pointer < history.length - 1) {
+        const nextPointer = historyBrowse.pointer + 1;
+        setHistoryBrowse({
           pointer: nextPointer,
-          restore: promptHistoryBrowse.restore,
+          restore: historyBrowse.restore,
         });
-        setDraft(promptHistory[nextPointer] ?? "");
+        setDraft(history[nextPointer] ?? "");
       } else {
-        setPromptHistoryBrowse(null);
-        setDraft(promptHistoryBrowse.restore);
+        setHistoryBrowse(null);
+        setDraft(historyBrowse.restore);
       }
       return;
     }
@@ -577,7 +575,7 @@ export function AcpUiApp({
       return;
     }
     setDraft((d) => appendFileMentionsToDraft(d, paths, root));
-    setPromptHistoryBrowse(null);
+    setHistoryBrowse(null);
     requestAnimationFrame(() => {
       composerTextareaRef.current?.focus();
     });
