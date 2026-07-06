@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/protocol-v2.md
+feature: docs/features/platform.md
 ---
 
 # Task: Protocol v2 migration planning

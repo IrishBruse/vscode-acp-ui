@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/session-management.md
+feature: docs/features/sessions.md
 ---
 
 # Task: Session list and delete (`session/list`, `session/delete`)

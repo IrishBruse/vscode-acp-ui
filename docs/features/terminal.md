@@ -15,3 +15,4 @@ It also covers implementing SDK `createTerminal` via `vscode.window.createTermin
 
 Task: [terminal](../tasks/terminal.md).
 Protocol: [terminals](../acp/protocol/v1/terminals.mdx).
+Related: [authentication](./authentication.md) for terminal auth, [client](./client.md) for capability advertisement.

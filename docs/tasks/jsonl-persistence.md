@@ -1,6 +1,6 @@
 ---
 status: done
-feature: docs/features/session-persistence.md
+feature: docs/features/sessions.md
 ---
 
 # Task: JSONL persistence + `historyReplay`

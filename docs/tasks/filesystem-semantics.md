@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/filesystem-semantics.md
+feature: docs/features/filesystem.md
 ---
 
 # Task: Filesystem semantics

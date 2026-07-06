@@ -1,4 +1,4 @@
-# MCP Servers
+# MCP
 
 ## User facing
 

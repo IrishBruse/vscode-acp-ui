@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/client-initialization.md
+feature: docs/features/client.md
 ---
 
 # Task: Initialization metadata

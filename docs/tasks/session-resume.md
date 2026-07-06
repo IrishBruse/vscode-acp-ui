@@ -1,6 +1,6 @@
 ---
 status: done
-feature: docs/features/session-resume.md
+feature: docs/features/sessions.md
 ---
 
 # Task: Session resume (`session/load`)

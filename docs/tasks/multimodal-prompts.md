@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/multimodal-prompts.md
+feature: docs/features/composer.md
 ---
 
 # Task: Multimodal prompts and structured `@` mentions

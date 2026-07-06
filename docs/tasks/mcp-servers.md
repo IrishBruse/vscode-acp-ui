@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/mcp-servers.md
+feature: docs/features/mcp.md
 ---
 
 # Task: MCP servers forwarding

@@ -1,4 +1,4 @@
-# ACP Registry
+# Agent Registry
 
 ## User facing
 

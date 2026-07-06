@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/session-updates.md
+feature: docs/features/sessions.md
 ---
 
 # Task: Unhandled `session/update` types

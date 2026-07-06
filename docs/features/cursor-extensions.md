@@ -15,4 +15,5 @@ Goals include phased plan dialogs, a dedicated todo panel, structured subagent t
 Gaps: `phases` on create_plan, dedicated UI for `update_todos` and `task`, inline `generate_image`, and agent `toolCallId` correlation in bridge request ids.
 
 Task: [cursor-extension-ux](../tasks/cursor-extension-ux.md).
+Related features: [sessions](./sessions.md), [composer](./composer.md).
 Reference: [cursor extensions](../cursor-extensions/extensions.md).

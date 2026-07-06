@@ -1,7 +1,7 @@
 # Task docs
 
 Tracked work items live under `docs/tasks/`.
-Each task file links to the product feature it implements or will create.
+Each task file links to the high-level product feature it contributes to.
 
 ## File layout
 
@@ -26,14 +26,16 @@ feature: docs/features/<feature-slug>.md
 ### `feature`
 
 Path to the feature doc under `docs/features/`.
-One feature file per user-visible or session-behavior surface.
-Create `docs/features/<feature-slug>.md` when you add a task if it does not exist yet.
+Features are **combined high-level areas** (for example `sessions.md`, `composer.md`).
+Several tasks may share the same `feature` path.
+
+Create or extend `docs/features/<feature-slug>.md` when you add a task if no suitable feature exists yet.
 Follow [docs/features/AGENTS.md](../features/AGENTS.md) for feature doc structure.
 
-When the task ships, update the linked feature doc (`## User facing` and `## Implementation`).
+When the task ships, update the linked feature doc (`## User facing` and the matching `## Implementation` subsection).
 Do not duplicate long implementation detail in the task body after the feature doc is complete.
 
-Planning-only tasks (no product surface) may omit `feature` or set it to a thin planning doc under `docs/features/`.
+Planning-only tasks with no product surface may omit `feature` or link to [platform](../features/platform.md).
 
 ## Body sections
 
@@ -54,6 +56,6 @@ That field lives only in frontmatter.
 
 | Location | Purpose |
 | --- | --- |
-| `docs/features/` | What ACP UI does (or will do) for users |
+| `docs/features/` | What ACP UI does (or will do) for users, grouped by product area |
 | `docs/tasks/` | Backlog and checklists |
 | `docs/acp/` | Upstream ACP protocol reference |
