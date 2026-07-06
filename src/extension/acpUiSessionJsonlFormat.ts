@@ -215,40 +215,10 @@ export const immediateFlushSessionEventTypes = new Set<string>([
 ]);
 
 /**
- * Debug metadata for legacy `//` comment records (read-only).
- */
-export type AcpUiSessionRecordDebug = {
-    record?: "header" | "event" | "rpc";
-    type?: string;
-    method?: string;
-    durationMs?: number;
-    direction?: "toAgent" | "fromAgent";
-};
-
-/**
  * Serializes a replay event or other session record as indented JSON (no comment line).
  */
 export function serializeSessionRecord(value: unknown): string {
     return `${JSON.stringify(value, null, 2)}\n`;
-}
-
-export type SerializeSessionRpcRecordOptions = {
-    /** When true, writes indented JSON. Default is compact single-line JSON. */
-    pretty?: boolean;
-};
-
-/**
- * Serializes one ACP JSON-RPC payload for the session file (no debug comment line).
- */
-export function serializeSessionRpcRecord(
-    value: unknown,
-    options: SerializeSessionRpcRecordOptions = {},
-): string {
-    const json =
-        options.pretty === true
-            ? JSON.stringify(value, null, 2)
-            : JSON.stringify(value);
-    return `${json}\n`;
 }
 
 function parseMultiLineJsonBlock(
@@ -452,7 +422,7 @@ function headerFromParsedValue(value: unknown): AcpUiSessionHeader | null {
 }
 
 /**
- * First-line metadata for a chat session file.
+ * Metadata for a chat session file.
  */
 export type AcpUiSessionHeader = {
     schema: typeof ACP_UI_SESSION_SCHEMA;
@@ -463,6 +433,13 @@ export type AcpUiSessionHeader = {
     promptHistory?: string[];
     createdAt: number;
     updatedAt: number;
+};
+
+/**
+ * On-disk session document: metadata plus editor-owned chat transcript.
+ */
+export type AcpUiSessionDocument = AcpUiSessionHeader & {
+    history: AcpUiSessionReplayEvent[];
 };
 
 /** User turn recorded in the append-only event log. */
@@ -548,6 +525,19 @@ export function isReplayableSessionEvent(
     return !ephemeralExtensionMessageTypes.has(messageType);
 }
 
+function normalizeSessionHistory(entries: unknown): AcpUiSessionReplayEvent[] {
+    if (!Array.isArray(entries)) {
+        return [];
+    }
+    const out: AcpUiSessionReplayEvent[] = [];
+    for (const item of entries) {
+        if (isReplayableSessionEvent(item)) {
+            out.push(item);
+        }
+    }
+    return out;
+}
+
 /**
  * Parses the session header from line 1 of a session file (legacy or pretty JSON).
  */
@@ -578,12 +568,67 @@ export function serializeSessionHeader(header: AcpUiSessionHeader): string {
 }
 
 /**
+ * Serializes a session document as pretty-printed JSON.
+ */
+export function serializeSessionDocument(
+    document: AcpUiSessionDocument,
+): string {
+    return `${JSON.stringify(document, null, 2)}\n`;
+}
+
+function sessionDocumentFromHeader(
+    header: AcpUiSessionHeader,
+    history: AcpUiSessionReplayEvent[],
+): AcpUiSessionDocument {
+    return { ...header, history };
+}
+
+/**
+ * Parses a session document from pretty-printed JSON.
+ */
+export function parseSessionDocument(
+    text: string,
+): AcpUiSessionDocument | null {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) {
+        return null;
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(trimmed);
+    } catch {
+        return null;
+    }
+    if (parsed === null || typeof parsed !== "object") {
+        return null;
+    }
+    const row = parsed as Record<string, unknown>;
+    if (!("history" in row)) {
+        return null;
+    }
+    const header = headerFromParsedValue(parsed);
+    if (header === null) {
+        return null;
+    }
+    return sessionDocumentFromHeader(
+        header,
+        normalizeSessionHistory(row.history),
+    );
+}
+
+/**
  * Parses the header block at the start of a session file, including line span.
  */
 export function parseSessionHeaderBlock(text: string): {
     header: AcpUiSessionHeader;
     consumedLines: number;
 } | null {
+    const document = parseSessionDocument(text);
+    if (document !== null) {
+        const { history: _history, ...header } = document;
+        const lineCount = text.split(/\r?\n/).length;
+        return { header, consumedLines: lineCount };
+    }
     const lines = text.split(/\r?\n/);
     if (lines.length === 0) {
         return null;
@@ -628,10 +673,7 @@ export function parseSessionEventLines(
     return parseSessionReplayEventsFromLines(lines, 0);
 }
 
-/**
- * Parses a full session file into header + replay events.
- */
-export function parseSessionFile(text: string): {
+function parseLegacyJsonlSessionFile(text: string): {
     header: AcpUiSessionHeader | null;
     events: AcpUiSessionReplayEvent[];
 } {
@@ -650,6 +692,21 @@ export function parseSessionFile(text: string): {
         headerRecord.consumedLines,
     );
     return { header, events };
+}
+
+/**
+ * Parses a full session file into header + replay events.
+ */
+export function parseSessionFile(text: string): {
+    header: AcpUiSessionHeader | null;
+    events: AcpUiSessionReplayEvent[];
+} {
+    const document = parseSessionDocument(text);
+    if (document !== null) {
+        const { history, ...header } = document;
+        return { header, events: history };
+    }
+    return parseLegacyJsonlSessionFile(text);
 }
 
 /**

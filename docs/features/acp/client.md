@@ -8,7 +8,7 @@ Today the most visible result is the Cursor model and thinking-level toolbar in 
 Other capability flags (terminals, terminal auth, boolean config options, elicitation) are planned.
 
 Planned: agents will receive `clientInfo` (name, version, title) on every `initialize` so they can identify the ACP UI build.
-Users will see a clear message when protocol version negotiation fails.
+Users see a clear message when protocol version negotiation fails.
 
 ## Implementation
 
@@ -28,9 +28,19 @@ Protocol: [extensibility](../../acp/protocol/extensibility.mdx), [session config
 
 ### Initialization metadata
 
-Not implemented.
-`clientInfo` is omitted on `initialize` today.
-The task adds fields from `package.json` and surfaces version mismatch errors.
+[configureAcpClientInfo](../../../src/extension/activateAcpUiExtension.ts#L22-L31) runs at extension activation.
+
+It sets `clientInfo` from `package.json` via [buildAcpClientInfoFromPackage](../../../src/acp/infrastructure/acpAgentProcess.ts#L115-L133).
+
+[AcpAgentProcess.start](../../../src/acp/infrastructure/acpAgentProcess.ts#L291-L299) sends it on every `initialize`.
+
+[assertNegotiatedProtocolVersion](../../../src/acp/infrastructure/acpAgentProcess.ts#L148-L157) rejects incompatible agent responses.
+
+It throws [AcpProtocolVersionMismatchError](../../../src/acp/infrastructure/acpAgentProcess.ts#L89-L106).
+
+The error message guides the user to update ACP UI or the agent.
+
+Connect failures surface that message in the chat UI and VS Code notification.
 
 Task: [initialization-metadata](../../tasks/initialization-metadata.md).
 Protocol: [initialization](../../acp/protocol/v1/initialization.mdx).

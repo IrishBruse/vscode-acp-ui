@@ -4,14 +4,15 @@ import {
     createDebouncedBatchQueue,
     enqueueSessionFileWrite,
     isReplayableSessionEvent,
+    parseSessionDocument,
     parseSessionEventLines,
     parseSessionFile,
     parseSessionHeaderBlock,
     parseSessionHeaderLine,
     parseSessionRecordAtLine,
+    serializeSessionDocument,
     serializeSessionHeader,
     serializeSessionRecord,
-    serializeSessionRpcRecord,
     sessionFileBaseNameFromTitle,
     shouldDeferJsonlHistoryReplay,
     shouldPersistExtensionMessage,
@@ -163,29 +164,19 @@ describe("serializeSessionRecord", () => {
     });
 });
 
-describe("serializeSessionRpcRecord", () => {
-    it("writes compact JSON by default", () => {
-        const payload = {
-            jsonrpc: "2.0",
-            method: "session/prompt",
-            id: 1,
+describe("serializeSessionDocument", () => {
+    it("writes a session document with history", () => {
+        const document = {
+            schema: ACP_UI_SESSION_SCHEMA,
+            id: "id-1",
+            title: "Chat",
+            createdAt: 1,
+            updatedAt: 2,
+            history: [{ type: "submit" as const, body: "hi" }],
         };
-        const block = serializeSessionRpcRecord(payload);
-        expect(block).toBe(`${JSON.stringify(payload)}\n`);
-        const parsed = parseSessionRecordAtLine(block.trimEnd().split("\n"), 0);
-        expect(parsed?.value).toEqual(payload);
-    });
-
-    it("pretty-prints when requested", () => {
-        const payload = {
-            jsonrpc: "2.0",
-            id: 0,
-            result: { protocolVersion: 1 },
-        };
-        const block = serializeSessionRpcRecord(payload, { pretty: true });
-        expect(block).toBe(`${JSON.stringify(payload, null, 2)}\n`);
-        const parsed = parseSessionRecordAtLine(block.trimEnd().split("\n"), 0);
-        expect(parsed?.value).toEqual(payload);
+        const text = serializeSessionDocument(document);
+        expect(parseSessionDocument(text)).toEqual(document);
+        expect(parseSessionFile(text).events).toEqual(document.history);
     });
 });
 
@@ -207,7 +198,23 @@ describe("serializeSessionHeader", () => {
 });
 
 describe("parseSessionHeaderBlock", () => {
-    it("spans all lines of a pretty-printed header", () => {
+    it("spans all lines of a session document", () => {
+        const document = {
+            schema: ACP_UI_SESSION_SCHEMA,
+            id: "id-1",
+            title: "Chat",
+            createdAt: 1,
+            updatedAt: 2,
+            history: [{ type: "submit" as const, body: "hi" }],
+        };
+        const text = serializeSessionDocument(document).trimEnd();
+        const parsed = parseSessionHeaderBlock(text);
+        const { history: _history, ...header } = document;
+        expect(parsed?.header).toEqual(header);
+        expect(parsed?.consumedLines).toBe(text.split("\n").length);
+    });
+
+    it("spans all lines of a legacy pretty-printed header", () => {
         const header = {
             schema: ACP_UI_SESSION_SCHEMA,
             id: "id-1",
@@ -253,7 +260,24 @@ describe("parseSessionHeaderLine", () => {
 });
 
 describe("parseSessionFile", () => {
-    it("parses pretty header and replay events", () => {
+    it("parses a session document", () => {
+        const document = {
+            schema: ACP_UI_SESSION_SCHEMA,
+            id: "id-1",
+            title: "Chat",
+            createdAt: 1,
+            updatedAt: 2,
+            history: [
+                { type: "submit" as const, body: "hi" },
+                { type: "appendAgentText" as const, text: "hello" },
+            ],
+        };
+        const parsed = parseSessionFile(serializeSessionDocument(document));
+        expect(parsed.header?.id).toBe("id-1");
+        expect(parsed.events).toEqual(document.history);
+    });
+
+    it("parses legacy pretty header and replay events", () => {
         const header = {
             schema: ACP_UI_SESSION_SCHEMA,
             id: "id-1",
@@ -301,7 +325,7 @@ describe("parseSessionFile", () => {
         ]);
     });
 
-    it("skips non-replayable rpc records", () => {
+    it("skips non-replayable legacy rpc records", () => {
         const header = serializeSessionHeader({
             schema: ACP_UI_SESSION_SCHEMA,
             id: "id-1",
@@ -309,11 +333,11 @@ describe("parseSessionFile", () => {
             createdAt: 1,
             updatedAt: 2,
         }).trimEnd();
-        const rpc = serializeSessionRpcRecord({
+        const rpc = JSON.stringify({
             jsonrpc: "2.0",
             method: "session/prompt",
             id: 1,
-        }).trimEnd();
+        });
         const event = serializeSessionRecord({
             type: "submit",
             body: "x",
@@ -358,25 +382,22 @@ describe("shouldDeferJsonlHistoryReplay", () => {
 });
 
 describe("append and replay round-trip", () => {
-    it("replays a transcript built from serialized append blocks", () => {
-        const header = {
+    it("replays a transcript from a session document", () => {
+        const events = [
+            { type: "submit" as const, body: "hello" },
+            { type: "appendAgentText" as const, text: "world" },
+            { type: "turnComplete" as const, stopReason: "end_turn" },
+        ];
+        const document = {
             schema: ACP_UI_SESSION_SCHEMA,
             id: "ui-session-uuid",
             title: "Chat",
             runtimeSessionId: "agent-runtime-id",
             createdAt: 1,
             updatedAt: 2,
+            history: events,
         };
-        const events = [
-            { type: "submit" as const, body: "hello" },
-            { type: "appendAgentText" as const, text: "world" },
-            { type: "turnComplete" as const, stopReason: "end_turn" },
-        ];
-        const lines = [serializeSessionHeader(header).trimEnd()];
-        for (const event of events) {
-            lines.push(serializeSessionRecord(event).trimEnd());
-        }
-        const parsed = parseSessionFile(`${lines.join("\n")}\n`);
+        const parsed = parseSessionFile(serializeSessionDocument(document));
         expect(parsed.header?.id).toBe("ui-session-uuid");
         expect(parsed.header?.runtimeSessionId).toBe("agent-runtime-id");
         expect(parsed.events).toEqual(events);

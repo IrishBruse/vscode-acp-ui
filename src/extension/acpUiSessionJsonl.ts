@@ -12,6 +12,7 @@ import {
 import {
     ACP_UI_SESSION_FILE_SUFFIX,
     ACP_UI_SESSION_SCHEMA,
+    type AcpUiSessionDocument,
     type AcpUiSessionHeader,
     type AcpUiSessionReplayEvent,
     createDebouncedBatchQueue,
@@ -19,10 +20,7 @@ import {
     immediateFlushSessionEventTypes,
     normalizePromptHistory,
     parseSessionFile,
-    parseSessionHeaderBlock,
-    serializeSessionHeader,
-    serializeSessionRecord,
-    serializeSessionRpcRecord,
+    serializeSessionDocument,
     sessionFileBaseNameFromTitle,
     uniqueSessionFileBaseNameFromTitle,
 } from "./acpUiSessionJsonlFormat";
@@ -30,23 +28,23 @@ import {
 export {
     ACP_UI_SESSION_FILE_SUFFIX,
     ACP_UI_SESSION_SCHEMA,
+    type AcpUiSessionDocument,
     type AcpUiSessionHeader,
-    type AcpUiSessionRecordDebug,
     type AcpUiSessionReplayEvent,
     type AcpUiSessionSubmitEvent,
     createDebouncedBatchQueue,
     enqueueSessionFileWrite,
     immediateFlushSessionEventTypes,
     isReplayableSessionEvent,
+    parseSessionDocument,
     parseSessionEventLines,
     parseSessionEventLinesFromIndex,
     parseSessionFile,
     parseSessionHeaderBlock,
     parseSessionHeaderLine,
-    type SerializeSessionRpcRecordOptions,
+    serializeSessionDocument,
     serializeSessionHeader,
     serializeSessionRecord,
-    serializeSessionRpcRecord,
     sessionFileBaseNameFromTitle,
     shouldDeferJsonlHistoryReplay,
     shouldPersistExtensionMessage,
@@ -54,12 +52,11 @@ export {
 } from "./acpUiSessionJsonlFormat";
 
 /**
- * Client-owned transcript files (`acpUi/session/1`) back the chat UI when ACP
+ * Client-owned session files (`acpUi/session/1`) back the chat UI when ACP
  * `session/load` is unavailable or fails.
  * When load succeeds, the log is cleared and agent replay becomes the source of truth.
  */
 const sessionsDirectorySettingKey = "ib-acp-ui.sessionsDirectory";
-const sessionFilePrettyRpcSettingKey = "ib-acp-ui.sessionFilePrettyRpc";
 const chatsSubdir = "chats";
 const folderLayoutMigrationKey = "acpUi.chats.folderLayoutMigration.v1";
 
@@ -275,7 +272,7 @@ export async function createSessionFile(
         header.id,
         header.title,
     );
-    const content = serializeSessionHeader(header);
+    const content = serializeSessionDocument({ ...header, history: [] });
     await workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
     return { id: header.id, uri, header };
 }
@@ -286,10 +283,74 @@ const sessionFileAppendMaxBatchSize = 48;
 const sessionFileAppendQueue = createDebouncedBatchQueue({
     debounceMs: sessionFileAppendDebounceMs,
     maxBatchSize: sessionFileAppendMaxBatchSize,
-    onFlush: async (key, blocks) => {
-        await appendSessionFileBlocks(Uri.parse(key), blocks);
+    onFlush: async (key, batches) => {
+        const events: AcpUiSessionReplayEvent[] = [];
+        for (const item of batches) {
+            try {
+                const parsed = JSON.parse(item) as unknown;
+                if (
+                    parsed !== null &&
+                    typeof parsed === "object" &&
+                    "type" in parsed
+                ) {
+                    events.push(parsed as AcpUiSessionReplayEvent);
+                }
+            } catch {
+                // Skip malformed batch entries.
+            }
+        }
+        await appendSessionHistoryEvents(Uri.parse(key), events);
     },
 });
+
+async function readSessionDocumentAtUri(
+    uri: Uri,
+): Promise<AcpUiSessionDocument | null> {
+    const doc = await workspace.openTextDocument(uri);
+    const parsed = parseSessionFile(doc.getText());
+    if (parsed.header === null) {
+        return null;
+    }
+    return { ...parsed.header, history: parsed.events };
+}
+
+async function writeSessionDocument(
+    uri: Uri,
+    document: AcpUiSessionDocument,
+): Promise<void> {
+    const content = serializeSessionDocument(document);
+    await applySessionFileEdit(
+        uri,
+        (edit, doc) => {
+            const fullRange = new Range(
+                doc.positionAt(0),
+                doc.positionAt(doc.getText().length),
+            );
+            edit.replace(uri, fullRange, content);
+        },
+        `Failed to write session document for ${uri.fsPath}`,
+    );
+}
+
+async function appendSessionHistoryEvents(
+    uri: Uri,
+    events: ReadonlyArray<AcpUiSessionReplayEvent>,
+): Promise<void> {
+    if (events.length === 0) {
+        return;
+    }
+    await enqueueSessionFileWrite(uri.toString(), async () => {
+        const current = await readSessionDocumentAtUri(uri);
+        if (current === null) {
+            throw new Error(`Missing session document at ${uri.fsPath}`);
+        }
+        await writeSessionDocument(uri, {
+            ...current,
+            history: [...current.history, ...events],
+            updatedAt: Date.now(),
+        });
+    });
+}
 
 async function applySessionFileEdit(
     uri: Uri,
@@ -308,26 +369,6 @@ async function applySessionFileEdit(
     });
 }
 
-async function appendSessionFileBlocks(
-    uri: Uri,
-    blocks: string[],
-): Promise<void> {
-    if (blocks.length === 0) {
-        return;
-    }
-    const combined = blocks.join("");
-    await applySessionFileEdit(
-        uri,
-        (edit, doc) => {
-            const text = doc.getText();
-            const suffix = text.length > 0 && !text.endsWith("\n") ? "\n" : "";
-            const insertPos = doc.positionAt(text.length);
-            edit.insert(uri, insertPos, `${suffix}${combined}`);
-        },
-        `Failed to append session records to ${uri.fsPath}`,
-    );
-}
-
 /**
  * Flushes any debounced session file appends for `uri`.
  */
@@ -336,52 +377,42 @@ export async function flushPendingSessionFileWrites(uri: Uri): Promise<void> {
 }
 
 /**
- * Removes all replay events and RPC records, keeping only the session header.
+ * Clears editor-owned chat history, keeping session metadata.
  */
 export async function clearSessionFileLog(
     uri: Uri,
 ): Promise<AcpUiSessionHeader | null> {
     await flushPendingSessionFileWrites(uri);
-    const doc = await workspace.openTextDocument(uri);
-    const parsed = parseSessionFile(doc.getText());
-    if (parsed.header === null) {
+    const current = await readSessionDocumentAtUri(uri);
+    if (current === null) {
         return null;
     }
-    const content = serializeSessionHeader(parsed.header);
-    await enqueueSessionFileWrite(uri.toString(), async () => {
-        const latest = await workspace.openTextDocument(uri);
-        const edit = new WorkspaceEdit();
-        const fullRange = new Range(
-            latest.positionAt(0),
-            latest.positionAt(latest.getText().length),
-        );
-        edit.replace(uri, fullRange, content);
-        const applied = await workspace.applyEdit(edit);
-        if (!applied) {
-            throw new Error(`Failed to clear session log for ${uri.fsPath}`);
-        }
-        await latest.save();
-    });
-    return parsed.header;
+    const next: AcpUiSessionDocument = {
+        ...current,
+        history: [],
+        updatedAt: Date.now(),
+    };
+    await writeSessionDocument(uri, next);
+    const { history: _history, ...header } = next;
+    return header;
 }
 
 /**
- * Appends one replay event block to a session file.
+ * Appends one replay event to the session document `history` array.
  */
 export async function appendSessionEvent(
     uri: Uri,
     event: AcpUiSessionReplayEvent,
 ): Promise<void> {
-    const block = serializeSessionRecord(event);
     await sessionFileAppendQueue.enqueue(
         uri.toString(),
-        block,
+        JSON.stringify(event),
         immediateFlushSessionEventTypes.has(event.type),
     );
 }
 
 /**
- * Appends many replay event blocks in one batched write.
+ * Appends many replay events in one batched write.
  */
 export async function appendSessionEvents(
     uri: Uri,
@@ -390,22 +421,8 @@ export async function appendSessionEvents(
     if (events.length === 0) {
         return;
     }
-    const blocks = events.map((event) => serializeSessionRecord(event));
-    await sessionFileAppendQueue.enqueueMany(uri.toString(), blocks, true);
-}
-
-/**
- * Appends one raw ACP JSON-RPC record to a session file (not replayed in the UI).
- */
-export async function appendSessionRpcRecord(
-    uri: Uri,
-    payload: unknown,
-): Promise<void> {
-    const pretty = workspace
-        .getConfiguration()
-        .get<boolean>(sessionFilePrettyRpcSettingKey, false);
-    const block = serializeSessionRpcRecord(payload, { pretty });
-    await sessionFileAppendQueue.enqueue(uri.toString(), block);
+    const payloads = events.map((event) => JSON.stringify(event));
+    await sessionFileAppendQueue.enqueueMany(uri.toString(), payloads, true);
 }
 
 /**
@@ -425,13 +442,12 @@ export async function updateSessionHeader(
     >,
 ): Promise<AcpUiSessionHeader | null> {
     await flushPendingSessionFileWrites(uri);
-    const doc = await workspace.openTextDocument(uri);
-    const parsed = parseSessionHeaderBlock(doc.getText());
-    if (parsed === null) {
+    const current = await readSessionDocumentAtUri(uri);
+    if (current === null) {
         return null;
     }
-    const next: AcpUiSessionHeader = {
-        ...parsed.header,
+    const next: AcpUiSessionDocument = {
+        ...current,
         ...(patch.title !== undefined ? { title: patch.title.trim() } : {}),
         ...(patch.agentName !== undefined
             ? patch.agentName.length > 0
@@ -474,19 +490,9 @@ export async function updateSessionHeader(
     ) {
         delete next.promptHistory;
     }
-    const lastHeaderLine = parsed.consumedLines - 1;
-    const headerRange = new Range(
-        doc.positionAt(0),
-        doc.lineAt(lastHeaderLine).rangeIncludingLineBreak.end,
-    );
-    await applySessionFileEdit(
-        uri,
-        (edit) => {
-            edit.replace(uri, headerRange, serializeSessionHeader(next));
-        },
-        `Failed to update session header for ${uri.fsPath}`,
-    );
-    return next;
+    await writeSessionDocument(uri, next);
+    const { history: _history, ...header } = next;
+    return header;
 }
 
 /**

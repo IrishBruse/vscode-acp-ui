@@ -1,5 +1,5 @@
 ---
-status: not-started
+status: done
 feature: docs/features/acp/client.md
 ---
 
@@ -22,8 +22,8 @@ Version mismatch today relies on SDK default behavior with no user-facing explan
 
 | Field | Today |
 | --- | --- |
-| `clientInfo` | Omitted on `initialize` |
-| Version mismatch | No dedicated UI |
+| `clientInfo` | Sent on `initialize` from `package.json` (`name`, `version`, `title`) |
+| Version mismatch | `AcpProtocolVersionMismatchError` with actionable guidance |
 
 ## Key files
 
@@ -34,11 +34,11 @@ Version mismatch today relies on SDK default behavior with no user-facing explan
 
 ## Implementation checklist
 
-- [ ] Set `clientInfo.name` (e.g. `ib-acp-ui` / ACP UI)
-- [ ] Set `clientInfo.version` from extension package version
-- [ ] Optional `clientInfo.title` for display name
-- [ ] Catch version negotiation failure and show actionable error (update extension / agent)
-- [ ] `npm run verify` passes
+- [x] Set `clientInfo.name` (e.g. `ib-acp-ui` / ACP UI)
+- [x] Set `clientInfo.version` from extension package version
+- [x] Optional `clientInfo.title` for display name
+- [x] Catch version negotiation failure and show actionable error (update extension / agent)
+- [x] `npm run verify` passes
 
 ## Definition of done
 

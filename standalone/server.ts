@@ -15,6 +15,10 @@ import { WebSocket, WebSocketServer } from "ws";
 import type { AcpAgentSpawnConfig } from "../src/acp/domain/agentSpawnConfig";
 import { parseAcpAgentsJsonFileContent } from "../src/acp/domain/agentSpawnConfig";
 import {
+    buildAcpClientInfoFromPackage,
+    configureAcpClientInfo,
+} from "../src/acp/infrastructure/acpAgentProcess";
+import {
     createToolCallKindTracking,
     extensionMessagesForPermissionRequest,
     sessionUpdateToWebviewMessages,
@@ -40,6 +44,18 @@ import {
 
 const PORT = Number(process.env.ACP_WS_PORT ?? 5174);
 const STANDALONE_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(STANDALONE_DIR, "..");
+
+configureAcpClientInfo(
+    buildAcpClientInfoFromPackage(
+        JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+            name?: string;
+            version?: string;
+            displayName?: string;
+        },
+    ),
+);
+
 const DEMO_MODE =
     process.env.ACP_UI_DEMO === "1" ||
     process.env.ACP_UI_DEMO === "true" ||

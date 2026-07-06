@@ -21,7 +21,7 @@ Document gaps that need other tasks (terminal handlers, elicitation UI) before a
 | `auth.terminal` | `true` | not sent | No |
 | `session.configOptions.boolean` | beta flag | not sent | Maybe |
 | `elicitation` (form + url) | beta flag | not sent | No |
-| `clientInfo` | name, version, title | omitted | No |
+| `clientInfo` | name, version, title | sent on `initialize` | No |
 | `fs.readTextFile` / `writeTextFile` | `true` | `true` | No |
 
 Reference implementation: [Zed `acp.rs`](https://github.com/zed-industries/zed/blob/main/crates/agent_servers/src/acp.rs) (`client_capabilities_for_agent`).
@@ -93,7 +93,7 @@ UI already renders boolean options as On/Off selects in `ConfigOptionControls`.
 
 ### `clientInfo`
 
-Tracked in [initialization-metadata.md](./initialization-metadata.md).
+Done in [initialization-metadata.md](./initialization-metadata.md).
 
 ### `elicitation` (form + url)
 

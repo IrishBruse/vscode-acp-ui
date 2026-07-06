@@ -21,7 +21,6 @@ import {
     getAcpAgentConfigByName,
     getAcpAgentConfigsFromSettings,
 } from "../acp/config/vscodeSettingsAgents";
-import { CompositeAcpRpcNdjsonSink } from "../acp/ports/rpcNdjsonSink";
 import { AcpSessionBridge } from "../acp/session/acpSessionBridge";
 import {
     readCachedComposerSeed,
@@ -42,7 +41,6 @@ import {
     moveAcpUiCustomEditorUri,
     setAcpUiCustomEditorTabTitle,
 } from "./acpUiCustomEditorProvider";
-import { AcpUiSessionFileRpcSink } from "./acpUiSessionFileRpcSink";
 import {
     type AcpUiSessionHeader,
     type AcpUiSessionReplayEvent,
@@ -463,12 +461,7 @@ export class AcpUiSessionController {
             return undefined;
         }
         const { rpcNdjsonSink } = getAcpUiExtensionActivation();
-        const sessionRpcSink = new AcpUiSessionFileRpcSink(this.documentUri);
-        const compositeRpcSink = new CompositeAcpRpcNdjsonSink([
-            rpcNdjsonSink,
-            sessionRpcSink,
-        ]);
-        const host = createDefaultAcpSessionHostRuntime(compositeRpcSink);
+        const host = createDefaultAcpSessionHostRuntime(rpcNdjsonSink);
         const bridge = new AcpSessionBridge(
             config,
             (msg) => this.post(msg),

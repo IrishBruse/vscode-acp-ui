@@ -3,6 +3,7 @@ import type {
     AcpRpcNdjsonLineContext,
     AcpRpcNdjsonSink,
 } from "../../acp/ports/rpcNdjsonSink";
+import { formatAcpRpcNdjsonDebugLine } from "../../acp/ports/rpcNdjsonSink";
 
 /**
  * Append-only NDJSON file sink for standalone / non-VS Code hosts (mirrors
@@ -17,13 +18,11 @@ export class FileAcpRpcNdjsonSink implements AcpRpcNdjsonSink {
         return this.logFilePath !== null;
     }
 
-    appendRawNdjsonLine(
-        line: string,
-        _context?: AcpRpcNdjsonLineContext,
-    ): void {
+    appendRawNdjsonLine(line: string, context?: AcpRpcNdjsonLineContext): void {
+        const formatted = formatAcpRpcNdjsonDebugLine(line, context);
         const s = this.getOrCreateStream();
         if (s !== null) {
-            s.write(`${line}\n`);
+            s.write(`${formatted}\n`);
         }
     }
 

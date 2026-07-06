@@ -19,7 +19,15 @@ export type {
     RequestPermissionHandler,
     SessionUpdateHandler,
 } from "./infrastructure/acpAgentProcess";
-export { AcpAgentProcess } from "./infrastructure/acpAgentProcess";
+export {
+    AcpAgentProcess,
+    AcpProtocolVersionMismatchError,
+    assertNegotiatedProtocolVersion,
+    buildAcpClientCapabilities,
+    buildAcpClientInfo,
+    buildAcpClientInfoFromPackage,
+    configureAcpClientInfo,
+} from "./infrastructure/acpAgentProcess";
 export {
     createToolCallKindTracking,
     extensionMessagesForPermissionRequest,
@@ -34,6 +42,7 @@ export type { AcpHostFilesystem } from "./ports/hostFilesystem";
 export type { AcpRpcNdjsonSink } from "./ports/rpcNdjsonSink";
 export {
     CompositeAcpRpcNdjsonSink,
+    formatAcpRpcNdjsonDebugLine,
     NullAcpRpcNdjsonSink,
 } from "./ports/rpcNdjsonSink";
 export {

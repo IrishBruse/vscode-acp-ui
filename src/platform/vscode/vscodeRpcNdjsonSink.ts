@@ -1,8 +1,9 @@
 import { createWriteStream, type WriteStream } from "node:fs";
 import type { OutputChannel } from "vscode";
-import type {
-    AcpRpcNdjsonLineContext,
-    AcpRpcNdjsonSink,
+import {
+    type AcpRpcNdjsonLineContext,
+    type AcpRpcNdjsonSink,
+    formatAcpRpcNdjsonDebugLine,
 } from "../../acp/ports/rpcNdjsonSink";
 
 /**
@@ -21,16 +22,14 @@ export class VscodeAcpRpcNdjsonSink implements AcpRpcNdjsonSink {
         return this.channel !== null || this.logFilePath !== null;
     }
 
-    appendRawNdjsonLine(
-        line: string,
-        _context?: AcpRpcNdjsonLineContext,
-    ): void {
+    appendRawNdjsonLine(line: string, context?: AcpRpcNdjsonLineContext): void {
+        const formatted = formatAcpRpcNdjsonDebugLine(line, context);
         if (this.channel !== null) {
-            this.channel.appendLine(line);
+            this.channel.appendLine(formatted);
         }
         const stream = this.getOrCreateLogFileStream();
         if (stream !== null) {
-            stream.write(`${line}\n`);
+            stream.write(`${formatted}\n`);
         }
     }
 

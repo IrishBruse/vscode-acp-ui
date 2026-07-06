@@ -27,6 +27,7 @@ function isFileNotFoundError(error: unknown): boolean {
 function createNdjsonRpcLogTap(
     sink: AcpRpcNdjsonSink,
     direction: AcpRpcNdjsonDirection,
+    agentName: string,
 ): Transform {
     let buffer = "";
     return new Transform({
@@ -42,7 +43,10 @@ function createNdjsonRpcLogTap(
             for (const part of parts) {
                 const trimmed = part.trim();
                 if (trimmed.length > 0) {
-                    sink.appendRawNdjsonLine(trimmed, { direction });
+                    sink.appendRawNdjsonLine(trimmed, {
+                        direction,
+                        agentName,
+                    });
                 }
             }
             callback(null, chunk);
@@ -50,7 +54,7 @@ function createNdjsonRpcLogTap(
         flush(callback): void {
             const trimmed = buffer.trim();
             if (trimmed.length > 0) {
-                sink.appendRawNdjsonLine(trimmed, { direction });
+                sink.appendRawNdjsonLine(trimmed, { direction, agentName });
             }
             buffer = "";
             callback();
@@ -61,6 +65,7 @@ function createNdjsonRpcLogTap(
 function ndJsonStreamTapsForChild(
     child: ChildProcess,
     rpcNdjsonSink: AcpRpcNdjsonSink,
+    agentName: string,
 ): {
     stdinWeb: WritableStream;
     stdoutWeb: ReadableStream<Uint8Array>;
@@ -73,8 +78,16 @@ function ndJsonStreamTapsForChild(
             ) as ReadableStream<Uint8Array>,
         };
     }
-    const towardAgent = createNdjsonRpcLogTap(rpcNdjsonSink, "toAgent");
-    const fromAgent = createNdjsonRpcLogTap(rpcNdjsonSink, "fromAgent");
+    const towardAgent = createNdjsonRpcLogTap(
+        rpcNdjsonSink,
+        "toAgent",
+        agentName,
+    );
+    const fromAgent = createNdjsonRpcLogTap(
+        rpcNdjsonSink,
+        "fromAgent",
+        agentName,
+    );
     towardAgent.pipe(child.stdin!);
     child.stdout!.pipe(fromAgent);
     return {
@@ -85,6 +98,77 @@ function ndJsonStreamTapsForChild(
 
 /** Callback invoked whenever the agent sends a session/update notification. */
 export type SessionUpdateHandler = (params: acp.SessionNotification) => void;
+
+/** Thrown when the agent negotiates an ACP protocol version this client build does not support. */
+export class AcpProtocolVersionMismatchError extends Error {
+    readonly negotiatedVersion: number;
+    readonly supportedVersion: number;
+
+    constructor(negotiatedVersion: number, supportedVersion: number) {
+        const direction =
+            negotiatedVersion > supportedVersion
+                ? "Update ACP UI to a newer version, or use an agent that supports the current protocol."
+                : "Update the agent to a newer version, or use an older ACP UI build if one is available.";
+        super(
+            `ACP protocol version mismatch: ACP UI supports protocol v${supportedVersion} but the agent negotiated v${negotiatedVersion}. ${direction}`,
+        );
+        this.name = "AcpProtocolVersionMismatchError";
+        this.negotiatedVersion = negotiatedVersion;
+        this.supportedVersion = supportedVersion;
+    }
+}
+
+let configuredClientInfo: acp.Implementation | undefined;
+
+/** Sets `clientInfo` sent on every `initialize` (extension package metadata at activation). */
+export function configureAcpClientInfo(info: acp.Implementation): void {
+    configuredClientInfo = info;
+}
+
+/** Builds `clientInfo` from extension `package.json` fields. */
+export function buildAcpClientInfoFromPackage(pkg: {
+    name?: string;
+    version?: string;
+    displayName?: string;
+}): acp.Implementation {
+    const name =
+        typeof pkg.name === "string" && pkg.name.length > 0
+            ? pkg.name
+            : "ib-acp-ui";
+    const version =
+        typeof pkg.version === "string" && pkg.version.length > 0
+            ? pkg.version
+            : "0.0.0";
+    const title =
+        typeof pkg.displayName === "string" && pkg.displayName.length > 0
+            ? pkg.displayName
+            : "ACP UI";
+    return { name, version, title };
+}
+
+/** `clientInfo` for the `initialize` request (configured at activation or a safe fallback). */
+export function buildAcpClientInfo(): acp.Implementation {
+    return (
+        configuredClientInfo ??
+        buildAcpClientInfoFromPackage({
+            name: "ib-acp-ui",
+            version: "0.0.0",
+            displayName: "ACP UI",
+        })
+    );
+}
+
+/** Ensures the negotiated protocol version is supported by this client build. */
+export function assertNegotiatedProtocolVersion(
+    response: acp.InitializeResponse,
+): void {
+    if (response.protocolVersion !== acp.PROTOCOL_VERSION) {
+        throw new AcpProtocolVersionMismatchError(
+            response.protocolVersion,
+            acp.PROTOCOL_VERSION,
+        );
+    }
+}
 
 /** Client capabilities for the ACP initialize handshake (matches Zed for Cursor). */
 export function buildAcpClientCapabilities(
@@ -108,6 +192,8 @@ export type RequestPermissionHandler = (
 
 export type AcpAgentProcessOptions = {
     config: AcpAgentSpawnConfig;
+    /** Sent on `initialize`; defaults to {@link buildAcpClientInfo}. */
+    clientInfo?: acp.Implementation;
     requestPermission: RequestPermissionHandler;
     extMethod?: (
         method: string,
@@ -188,6 +274,7 @@ export class AcpAgentProcess {
         const { stdinWeb, stdoutWeb } = ndJsonStreamTapsForChild(
             this.child,
             this.options.rpcNdjsonSink,
+            this.options.config.name,
         );
         const stream = acp.ndJsonStream(stdinWeb, stdoutWeb);
 
@@ -221,7 +308,9 @@ export class AcpAgentProcess {
         const response = await this.connection.initialize({
             protocolVersion: acp.PROTOCOL_VERSION,
             clientCapabilities: buildAcpClientCapabilities(this.options.config),
+            clientInfo: this.options.clientInfo ?? buildAcpClientInfo(),
         });
+        assertNegotiatedProtocolVersion(response);
 
         this.initResponse = response;
         return response;

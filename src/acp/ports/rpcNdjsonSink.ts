@@ -6,7 +6,31 @@ export type AcpRpcNdjsonDirection = "toAgent" | "fromAgent";
 
 export type AcpRpcNdjsonLineContext = {
     direction: AcpRpcNdjsonDirection;
+    /** Agent display name when the line comes from a configured connection. */
+    agentName?: string;
 };
+
+const rpcNdjsonDebugFieldSeparator = " | ";
+
+/**
+ * Formats one NDJSON-RPC line for extension debug output.
+ */
+export function formatAcpRpcNdjsonDebugLine(
+    line: string,
+    context?: AcpRpcNdjsonLineContext,
+): string {
+    if (context === undefined) {
+        return line;
+    }
+    const fields = [
+        ...(context.agentName !== undefined && context.agentName.length > 0
+            ? [context.agentName]
+            : []),
+        context.direction,
+        line,
+    ];
+    return `// ${fields.join(rpcNdjsonDebugFieldSeparator)}`;
+}
 
 export interface AcpRpcNdjsonSink {
     readonly isLoggingEnabled: boolean;
