@@ -2,12 +2,16 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-07-06
+
 - Added `ib-acp-ui.toolCallVerbosity` setting (`verbose` or `compact`) to switch tool calls between full blocks and single-line summaries.
-- Added `ib-acp-ui.contentWidthRatio` setting (0.1 to 1) to control how much horizontal space the transcript and composer use.
-  `1` is full width, `0.5` is half width with equal side margins.
+- Added `ib-acp-ui.contentWidthPercent` setting (10 to 100) to control how much horizontal space the transcript and composer use.
+  `100` is full width, `50` is half width with equal side margins.
+- Group slash-command autocomplete by skill source with separate source labels for user and global skills.
 - Restyled markdown tables to match VS Code settings lists (borderless, monospace, plain cell text).
 - Compact mode keeps terminal commands separate from read/grep groups and truncates long command output with a tail preview plus hidden-line hint.
 - Pin the conversation scrollbar to the far right of the chat panel while keeping transcript and composer content centered.
+- Show the loading indicator immediately when a prompt is sent.
 
 ## 0.3.0 - 2026-07-06
 

@@ -24,7 +24,7 @@
     "description": "Agent Client Protocol (ACP) UI integration",
     "publisher": "irishbruse",
     "author": "Ethan Conneely",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "icon": "icon.png",
     "license": "MIT",
     "repository": {
