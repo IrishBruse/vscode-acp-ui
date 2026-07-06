@@ -59,14 +59,22 @@ describe("deleteAgentSession", () => {
 
     it("calls session/delete when the agent advertises delete", async () => {
         mockSupportsDeleteSessions.mockReturnValue(true);
-        await deleteAgentSession(testAgentConfig, "sess-runtime-1");
+        const result = await deleteAgentSession(
+            testAgentConfig,
+            "sess-runtime-1",
+        );
+        expect(result).toEqual({ supported: true, deleted: true });
         expect(mockDeleteSession).toHaveBeenCalledWith("sess-runtime-1");
         expect(mockDispose).toHaveBeenCalled();
     });
 
     it("skips session/delete when the agent does not advertise delete", async () => {
         mockSupportsDeleteSessions.mockReturnValue(false);
-        await deleteAgentSession(testAgentConfig, "sess-runtime-1");
+        const result = await deleteAgentSession(
+            testAgentConfig,
+            "sess-runtime-1",
+        );
+        expect(result).toEqual({ supported: false, deleted: false });
         expect(mockDeleteSession).not.toHaveBeenCalled();
         expect(mockDispose).toHaveBeenCalled();
     });

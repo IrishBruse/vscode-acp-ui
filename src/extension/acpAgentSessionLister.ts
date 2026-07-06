@@ -55,6 +55,7 @@ async function listSessionsWithAuthRetry(
 
 export type FetchAgentSessionsResult = {
     supported: boolean;
+    deleteSupported: boolean;
     sessions: acp.SessionInfo[];
 };
 
@@ -77,7 +78,7 @@ export async function fetchAgentSessionsForWorkspace(
     try {
         const init = await agent.start();
         if (!agent.supportsListSessions()) {
-            return { supported: false, sessions: [] };
+            return { supported: false, deleteSupported: false, sessions: [] };
         }
         await ensureAuthenticated(agent, init, config);
         const sessions = await listSessionsWithAuthRetry(
@@ -86,7 +87,11 @@ export async function fetchAgentSessionsForWorkspace(
             config,
             cwd,
         );
-        return { supported: true, sessions: sortSessionInfos(sessions) };
+        return {
+            supported: true,
+            deleteSupported: agent.supportsDeleteSessions(),
+            sessions: sortSessionInfos(sessions),
+        };
     } finally {
         agent.dispose();
     }
@@ -95,10 +100,15 @@ export async function fetchAgentSessionsForWorkspace(
 /**
  * Best-effort `session/delete` on a short-lived agent connection.
  */
+export type DeleteAgentSessionResult = {
+    supported: boolean;
+    deleted: boolean;
+};
+
 export async function deleteAgentSession(
     config: AcpAgentConfig,
     runtimeSessionId: string,
-): Promise<void> {
+): Promise<DeleteAgentSessionResult> {
     const { rpcNdjsonSink } = getAcpUiExtensionActivation();
     const host = createDefaultAcpSessionHostRuntime(rpcNdjsonSink);
     const agent = new AcpAgentProcess({
@@ -111,7 +121,7 @@ export async function deleteAgentSession(
     try {
         const init = await agent.start();
         if (!agent.supportsDeleteSessions()) {
-            return;
+            return { supported: false, deleted: false };
         }
         await ensureAuthenticated(agent, init, config);
         try {
@@ -123,6 +133,7 @@ export async function deleteAgentSession(
             await ensureAuthenticated(agent, init, config);
             await agent.deleteSession(runtimeSessionId);
         }
+        return { supported: true, deleted: true };
     } finally {
         agent.dispose();
     }

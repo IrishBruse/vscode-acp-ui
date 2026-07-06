@@ -17,6 +17,7 @@ import { getAcpAgentConfigsFromSettings } from "../acp/config/vscodeSettingsAgen
 import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";
 import { registerCommandIB } from "../utils/vscode";
 import {
+    type DeleteAgentSessionResult,
     deleteAgentSession,
     fetchAgentSessionsForWorkspace,
 } from "./acpAgentSessionLister";
@@ -39,6 +40,8 @@ import {
     ensureLocalSessionForAgentSession,
     findByRuntimeSessionId,
     getActiveAcpUiSessionId,
+    getHiddenAgentSessionIds,
+    hideAgentSession,
     listAcpUiSessions,
     listAcpUiSessionsForAgent,
     refreshAcpUiSessionsFromDisk,
@@ -75,6 +78,92 @@ type FocusedAcpUiSession =
           agentName: string;
       };
 
+type ResolvedAcpUiSessionTarget =
+    | {
+          source: "agent";
+          runtimeSessionId: string;
+          agentName: string;
+          localSessionId?: string;
+      }
+    | {
+          source: "local";
+          localSessionId: string;
+          agentName: string;
+          runtimeSessionId?: string;
+      };
+
+type ParsedSessionTreeItemId =
+    | { source: "local"; localSessionId: string }
+    | { source: "agent"; runtimeSessionId: string };
+
+function parseSessionTreeItemId(
+    id: string,
+): ParsedSessionTreeItemId | undefined {
+    if (id.startsWith("local:")) {
+        const localSessionId = id.slice("local:".length);
+        return localSessionId.length > 0
+            ? { source: "local", localSessionId }
+            : undefined;
+    }
+    if (id.startsWith("agent:")) {
+        const runtimeSessionId = id.slice("agent:".length);
+        return runtimeSessionId.length > 0
+            ? { source: "agent", runtimeSessionId }
+            : undefined;
+    }
+    return undefined;
+}
+
+function resolveSessionTarget(
+    item: AcpUiSessionsTreeNode | undefined,
+    focus: FocusedAcpUiSession | null,
+    agentName: string | undefined,
+): ResolvedAcpUiSessionTarget | undefined {
+    if (item !== undefined && "source" in item) {
+        if (item.source === "local") {
+            if (item.localSessionId === undefined) {
+                return undefined;
+            }
+            return {
+                source: "local",
+                localSessionId: item.localSessionId,
+                agentName: item.agentName,
+                runtimeSessionId: item.runtimeSessionId,
+            };
+        }
+        if (item.runtimeSessionId === undefined) {
+            return undefined;
+        }
+        return {
+            source: "agent",
+            runtimeSessionId: item.runtimeSessionId,
+            agentName: item.agentName,
+            localSessionId: item.localSessionId,
+        };
+    }
+    if (item?.id !== undefined) {
+        const parsed = parseSessionTreeItemId(item.id);
+        if (parsed !== undefined && agentName !== undefined) {
+            if (parsed.source === "local") {
+                return {
+                    source: "local",
+                    localSessionId: parsed.localSessionId,
+                    agentName,
+                };
+            }
+            return {
+                source: "agent",
+                runtimeSessionId: parsed.runtimeSessionId,
+                agentName,
+            };
+        }
+    }
+    if (focus !== null) {
+        return focus;
+    }
+    return undefined;
+}
+
 class AcpUiPlaceholderTreeItem extends TreeItem {
     constructor(message: string) {
         super(message, TreeItemCollapsibleState.None);
@@ -98,6 +187,10 @@ class AcpUiSessionTreeItem extends TreeItem {
         this.tooltip = label;
         this.iconPath = new ThemeIcon(iconChat);
         const openId = source === "local" ? localSessionId : runtimeSessionId;
+        this.id =
+            source === "local"
+                ? `local:${localSessionId ?? ""}`
+                : `agent:${runtimeSessionId ?? ""}`;
         this.command = {
             title: "Open Chat",
             command: cmdOpenAcpUiSession,
@@ -113,6 +206,7 @@ export class AcpUiSessionsViewProvider
     private focusedSession: FocusedAcpUiSession | null = null;
     private agentSessions: acp.SessionInfo[] = [];
     private agentListSupported = false;
+    private agentDeleteSupported = false;
     private agentListProbeComplete = false;
     private treeView: TreeView<AcpUiSessionsTreeNode> | undefined;
 
@@ -247,6 +341,7 @@ export class AcpUiSessionsViewProvider
         if (agent === undefined) {
             this.agentSessions = [];
             this.agentListSupported = false;
+            this.agentDeleteSupported = false;
             this.agentListProbeComplete = true;
             this.updateAgentMessage();
             this.refresh();
@@ -259,6 +354,7 @@ export class AcpUiSessionsViewProvider
         if (cwd === undefined) {
             this.agentSessions = [];
             this.agentListSupported = false;
+            this.agentDeleteSupported = false;
             this.agentListProbeComplete = true;
             this.updateAgentMessage();
             this.refresh();
@@ -267,8 +363,12 @@ export class AcpUiSessionsViewProvider
         try {
             const result = await fetchAgentSessionsForWorkspace(agent, cwd);
             this.agentListSupported = result.supported;
+            this.agentDeleteSupported = result.deleteSupported;
+            const hidden = getHiddenAgentSessionIds(agent.name);
             this.agentSessions = result.supported
-                ? sortSessionInfos(result.sessions)
+                ? sortSessionInfos(result.sessions).filter(
+                      (row) => !hidden.has(row.sessionId),
+                  )
                 : [];
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
@@ -276,6 +376,7 @@ export class AcpUiSessionsViewProvider
                 `[ACP UI] session/list failed for "${agent.name}": ${message}`,
             );
             this.agentListSupported = false;
+            this.agentDeleteSupported = false;
             this.agentSessions = [];
         }
         this.agentListProbeComplete = true;
@@ -457,48 +558,53 @@ export class AcpUiSessionsViewProvider
     private async notifyAgentSessionDelete(
         agent: NonNullable<ReturnType<typeof getActiveAgentConfig>>,
         runtimeSessionId: string,
-    ): Promise<void> {
+    ): Promise<DeleteAgentSessionResult> {
         try {
-            await deleteAgentSession(agent, runtimeSessionId);
+            return await deleteAgentSession(agent, runtimeSessionId);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             getAcpUiExtensionActivation().outputChannel.appendLine(
                 `[ACP UI] session/delete failed for "${runtimeSessionId}": ${message}`,
             );
+            return { supported: this.agentDeleteSupported, deleted: false };
         }
+    }
+
+    private reportAgentDeleteOutcome(
+        result: DeleteAgentSessionResult,
+        labelText: string,
+    ): void {
+        if (result.deleted) {
+            return;
+        }
+        if (!result.supported) {
+            void window.showInformationMessage(
+                `Removed "${labelText}" from the Chats list. This agent does not support remote session delete.`,
+            );
+            return;
+        }
+        void window.showWarningMessage(
+            `Removed "${labelText}" from the Chats list, but the agent did not confirm session/delete.`,
+        );
     }
 
     private async deleteSession(
         item: AcpUiSessionsTreeNode | undefined,
     ): Promise<void> {
-        const resolved =
-            item !== undefined && "source" in item ? item : undefined;
-        const focus = this.focusedSession;
-        const agentName =
-            resolved?.agentName ??
-            focus?.agentName ??
-            getActiveAgentConfig()?.name;
-        if (agentName === undefined) {
+        const agent = getActiveAgentConfig();
+        const target = resolveSessionTarget(
+            item,
+            this.focusedSession,
+            agent?.name,
+        );
+        if (target === undefined) {
             window.showErrorMessage("Select a chat in the Chats list");
             return;
         }
 
-        if (resolved?.source === "local" || focus?.source === "local") {
-            const localSessionId =
-                resolved?.source === "local"
-                    ? resolved.localSessionId
-                    : focus?.source === "local"
-                      ? focus.localSessionId
-                      : undefined;
-            if (
-                typeof localSessionId !== "string" ||
-                localSessionId.length === 0
-            ) {
-                window.showErrorMessage("Select a chat in the Chats list");
-                return;
-            }
+        if (target.source === "local") {
             const local = listAcpUiSessions().find(
-                (row) => row.id === localSessionId,
+                (row) => row.id === target.localSessionId,
             );
             if (local === undefined) {
                 window.showErrorMessage("That chat no longer exists");
@@ -513,16 +619,24 @@ export class AcpUiSessionsViewProvider
             if (answer !== "Delete") {
                 return;
             }
-            const agent = getActiveAgentConfig();
+            let deleteResult: DeleteAgentSessionResult = {
+                supported: false,
+                deleted: false,
+            };
             if (
                 agent !== undefined &&
                 local.sessionId !== undefined &&
                 local.sessionId.length > 0
             ) {
-                await this.notifyAgentSessionDelete(agent, local.sessionId);
+                deleteResult = await this.notifyAgentSessionDelete(
+                    agent,
+                    local.sessionId,
+                );
+                await hideAgentSession(target.agentName, local.sessionId);
             }
             await disposeAcpUiEditorForSession(local.id);
             await removeAcpUiSession(local.id);
+            this.reportAgentDeleteOutcome(deleteResult, local.title);
             if (this.agentListSupported) {
                 await this.refreshFromAgent();
             } else {
@@ -531,21 +645,16 @@ export class AcpUiSessionsViewProvider
             return;
         }
 
-        const runtimeSessionId =
-            resolved?.runtimeSessionId ??
-            (focus?.source === "agent" ? focus.runtimeSessionId : undefined);
-        if (
-            typeof runtimeSessionId !== "string" ||
-            runtimeSessionId.length === 0
-        ) {
-            window.showErrorMessage("Select a chat in the Chats list");
-            return;
-        }
-
+        const runtimeSessionId = target.runtimeSessionId;
         const listed = this.agentSessions.find(
             (row) => row.sessionId === runtimeSessionId,
         );
-        const local = findByRuntimeSessionId(agentName, runtimeSessionId);
+        const local =
+            target.localSessionId !== undefined
+                ? listAcpUiSessions().find(
+                      (row) => row.id === target.localSessionId,
+                  )
+                : findByRuntimeSessionId(target.agentName, runtimeSessionId);
         const labelText =
             listed !== undefined
                 ? sessionInfoLabel(listed)
@@ -559,10 +668,23 @@ export class AcpUiSessionsViewProvider
             return;
         }
 
-        const agent = getActiveAgentConfig();
+        await hideAgentSession(target.agentName, runtimeSessionId);
+        this.agentSessions = this.agentSessions.filter(
+            (row) => row.sessionId !== runtimeSessionId,
+        );
+        this.refresh();
+
+        let deleteResult: DeleteAgentSessionResult = {
+            supported: false,
+            deleted: false,
+        };
         if (agent !== undefined) {
-            await this.notifyAgentSessionDelete(agent, runtimeSessionId);
+            deleteResult = await this.notifyAgentSessionDelete(
+                agent,
+                runtimeSessionId,
+            );
         }
+        this.reportAgentDeleteOutcome(deleteResult, labelText);
 
         if (local !== undefined) {
             await disposeAcpUiEditorForSession(local.id);
@@ -574,44 +696,29 @@ export class AcpUiSessionsViewProvider
     private async renameSession(
         item: AcpUiSessionsTreeNode | undefined,
     ): Promise<void> {
-        const resolved =
-            item !== undefined && "source" in item ? item : undefined;
-        const focus = this.focusedSession;
-        const agentName =
-            resolved?.agentName ??
-            focus?.agentName ??
-            getActiveAgentConfig()?.name;
-        if (agentName === undefined) {
+        const target = resolveSessionTarget(
+            item,
+            this.focusedSession,
+            getActiveAgentConfig()?.name,
+        );
+        if (target === undefined) {
             window.showErrorMessage("Select a chat in the Chats list");
             return;
         }
 
-        let local =
-            resolved?.source === "local" &&
-            resolved.localSessionId !== undefined
+        const local =
+            target.source === "local"
                 ? listAcpUiSessions().find(
-                      (row) => row.id === resolved.localSessionId,
+                      (row) => row.id === target.localSessionId,
                   )
-                : focus?.source === "local"
+                : target.localSessionId !== undefined
                   ? listAcpUiSessions().find(
-                        (row) => row.id === focus.localSessionId,
+                        (row) => row.id === target.localSessionId,
                     )
-                  : undefined;
-        if (local === undefined) {
-            const runtimeSessionId =
-                resolved?.runtimeSessionId ??
-                (focus?.source === "agent"
-                    ? focus.runtimeSessionId
-                    : undefined);
-            if (
-                typeof runtimeSessionId !== "string" ||
-                runtimeSessionId.length === 0
-            ) {
-                window.showErrorMessage("Select a chat in the Chats list");
-                return;
-            }
-            local = findByRuntimeSessionId(agentName, runtimeSessionId);
-        }
+                  : findByRuntimeSessionId(
+                        target.agentName,
+                        target.runtimeSessionId,
+                    );
         if (local === undefined) {
             window.showErrorMessage(
                 "Open this chat before renaming it locally.",

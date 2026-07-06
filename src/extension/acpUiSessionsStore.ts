@@ -30,6 +30,9 @@ export { parseStoredChatItems } from "./acpUiLegacySessions";
 const chatsStorageKey = "acpUi.chats.v2";
 const legacyGlobalChatsStorageKey = "acpUi.chats.v1";
 const migrationDoneKey = "acpUi.chats.jsonlMigration.v1";
+const hiddenAgentSessionsKey = "acpUi.hiddenAgentSessions.v1";
+
+type HiddenAgentSessionsState = Record<string, string[]>;
 
 const sessions: AcpUiSessionRecord[] = [];
 let activeId: string | null = null;
@@ -349,4 +352,52 @@ export async function renameAcpUiSession(
         );
     }
     return true;
+}
+
+function readHiddenAgentSessionsState(): HiddenAgentSessionsState {
+    if (extensionContext === null) {
+        return {};
+    }
+    const raw = extensionContext.workspaceState.get<unknown>(
+        hiddenAgentSessionsKey,
+    );
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+        return {};
+    }
+    const state: HiddenAgentSessionsState = {};
+    for (const [agentName, ids] of Object.entries(raw)) {
+        if (!Array.isArray(ids)) {
+            continue;
+        }
+        const runtimeIds = ids.filter(
+            (id): id is string => typeof id === "string" && id.length > 0,
+        );
+        if (runtimeIds.length > 0) {
+            state[agentName] = runtimeIds;
+        }
+    }
+    return state;
+}
+
+/** Runtime session ids the user removed from the Chats tree for one agent. */
+export function getHiddenAgentSessionIds(
+    agentName: string,
+): ReadonlySet<string> {
+    const ids = readHiddenAgentSessionsState()[agentName];
+    return new Set(ids ?? []);
+}
+
+/** Hides an agent session from the Chats tree after the user deletes it. */
+export async function hideAgentSession(
+    agentName: string,
+    runtimeSessionId: string,
+): Promise<void> {
+    if (extensionContext === null) {
+        return;
+    }
+    const state = readHiddenAgentSessionsState();
+    const existing = new Set(state[agentName] ?? []);
+    existing.add(runtimeSessionId);
+    state[agentName] = [...existing];
+    await extensionContext.workspaceState.update(hiddenAgentSessionsKey, state);
 }

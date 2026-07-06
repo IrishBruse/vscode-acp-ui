@@ -317,10 +317,7 @@ export class AcpAgentProcess {
         if (!this.supportsDeleteSessions()) {
             throw new Error("Agent does not support session/delete");
         }
-        const rpc = this.connection as unknown as {
-            sendRequest<Req, Resp>(method: string, params?: Req): Promise<Resp>;
-        };
-        await rpc.sendRequest("session/delete", { sessionId });
+        await this.connection.deleteSession({ sessionId });
     }
 
     async newSession(): Promise<acp.NewSessionResponse> {
