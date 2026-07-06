@@ -29,7 +29,7 @@ function shortPathDisplay(rawPath: string): {
 
 function pathSegmentFromRaw(
     rawPath: string,
-    options?: { prefix?: string; suffix?: string },
+    options?: { prefix?: string; suffix?: string; openTarget?: "auto" },
 ): Pick<CompactToolDetailParts, "detail" | "pathSegment"> {
     const { short, full, hasDirectory } = shortPathDisplay(rawPath);
     const prefix = options?.prefix ?? "";
@@ -45,6 +45,7 @@ function pathSegmentFromRaw(
             label: short,
             title: full,
             openPath: rawPath.trim(),
+            ...(options?.openTarget === "auto" ? { openTarget: "auto" } : {}),
             ...(suffix.length > 0 ? { suffix } : {}),
         },
     };
@@ -63,12 +64,14 @@ export type CompactToolDetailParts = {
     verb: string;
     /** Visible detail text (uses short path labels). */
     detail: string;
-    /** When set, the path portion is rendered as a clickable link with hover expansion. */
+    /** When set, the path portion is a clickable link with hover expansion. */
     pathSegment?: {
         prefix?: string;
         label: string;
         title: string;
         openPath: string;
+        /** Reveal folders in the explorer; open files in the editor. */
+        openTarget?: "auto";
         suffix?: string;
     };
 };
@@ -154,7 +157,7 @@ function isGlobTool(item: TraceToolItem): boolean {
 
 function isSearchTool(item: TraceToolItem): boolean {
     const kind = normalizedKind(item);
-    if (kind === "search") {
+    if (kind === "search" || kind === "grep") {
         return true;
     }
     const title = item.title.toLowerCase();
@@ -323,11 +326,17 @@ export function compactToolDetailParts(
         if (pattern !== null) {
             return {
                 verb: "Globbed",
-                ...pathSegmentFromRaw(scope, { prefix: `"${pattern}" in ` }),
+                ...pathSegmentFromRaw(scope, {
+                    prefix: `"${pattern}" in `,
+                    openTarget: "auto",
+                }),
             };
         }
         if (scope.length > 0) {
-            return { verb: "Globbed", ...pathSegmentFromRaw(scope) };
+            return {
+                verb: "Globbed",
+                ...pathSegmentFromRaw(scope, { openTarget: "auto" }),
+            };
         }
         return { verb: "Globbed", detail: "" };
     }
@@ -341,14 +350,20 @@ export function compactToolDetailParts(
         if (pattern !== null && path.length > 0) {
             return {
                 verb: "Grepped",
-                ...pathSegmentFromRaw(path, { prefix: `"${pattern}" in ` }),
+                ...pathSegmentFromRaw(path, {
+                    prefix: `"${pattern}" in `,
+                    openTarget: "auto",
+                }),
             };
         }
         if (pattern !== null) {
             return { verb: "Grepped", detail: `"${pattern}"` };
         }
         if (path.length > 0) {
-            return { verb: "Grepped", ...pathSegmentFromRaw(path) };
+            return {
+                verb: "Grepped",
+                ...pathSegmentFromRaw(path, { openTarget: "auto" }),
+            };
         }
         return { verb: "Grepped", detail: "" };
     }

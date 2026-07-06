@@ -152,6 +152,34 @@ describe("toolCallCompactText", () => {
                 openPath: "webview/acp-ui/src/components/TraceList.css",
             },
         });
+        expect(compactToolDetailParts(item).pathSegment?.openTarget).toBeUndefined();
+    });
+
+    it("marks grep paths for auto open (folder reveal or file editor)", () => {
+        const item = toolItem({
+            toolCallId: "grep-1",
+            kind: "search",
+            title: "Grep",
+            subtitle: "/home/econn/git/vscode-acp-ui",
+        });
+        setCompactToolPathHome("/home/econn");
+        expect(compactToolDetailParts(item).pathSegment?.openTarget).toBe(
+            "auto",
+        );
+    });
+
+    it("treats kind grep like search for compact formatting", () => {
+        const item = toolItem({
+            toolCallId: "grep-kind",
+            kind: "grep",
+            title: "Tool",
+            subtitle: "/home/econn/git/vscode-acp-ui",
+        });
+        setCompactToolPathHome("/home/econn");
+        expect(compactToolDetailLine(item)).toBe("Grepped vscode-acp-ui");
+        expect(compactToolDetailParts(item).pathSegment?.openTarget).toBe(
+            "auto",
+        );
     });
 
     it("counts diff rows", () => {

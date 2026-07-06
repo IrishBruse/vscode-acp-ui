@@ -1,4 +1,5 @@
 import type { MouseEvent, ReactElement } from "react";
+import type { WorkspacePathOpenTarget } from "../../../src/protocol/extensionHostMessages";
 import "./ToolCallCompactBlock.css";
 import type { TraceToolItem } from "../chatReducer";
 import {
@@ -9,13 +10,23 @@ import {
     diffLineStats,
 } from "../toolCallCompactText";
 
+export type OpenWorkspacePathOptions = {
+    target?: WorkspacePathOpenTarget;
+};
+
 function openPathClick(
     event: MouseEvent<HTMLAnchorElement>,
     openPath: string,
-    onOpenWorkspacePath: ((path: string) => void) | undefined,
+    openTarget: "auto" | undefined,
+    onOpenWorkspacePath:
+        | ((path: string, options?: OpenWorkspacePathOptions) => void)
+        | undefined,
 ): void {
     event.preventDefault();
-    onOpenWorkspacePath?.(openPath);
+    onOpenWorkspacePath?.(
+        openPath,
+        openTarget === "auto" ? { target: "auto" } : undefined,
+    );
 }
 
 function CompactPathLink({
@@ -23,14 +34,21 @@ function CompactPathLink({
     onOpenWorkspacePath,
 }: {
     segment: NonNullable<CompactToolDetailParts["pathSegment"]>;
-    onOpenWorkspacePath: ((path: string) => void) | undefined;
+    onOpenWorkspacePath:
+        | ((path: string, options?: OpenWorkspacePathOptions) => void)
+        | undefined;
 }): ReactElement {
     return (
         <a
             className="tool-call-compact-path-link"
             href="#"
             onClick={(event) => {
-                openPathClick(event, segment.openPath, onOpenWorkspacePath);
+                openPathClick(
+                    event,
+                    segment.openPath,
+                    segment.openTarget,
+                    onOpenWorkspacePath,
+                );
             }}
         >
             <span className="tool-call-compact-path-short">{segment.label}</span>
@@ -44,7 +62,9 @@ function CompactDetailText({
     onOpenWorkspacePath,
 }: {
     parts: CompactToolDetailParts;
-    onOpenWorkspacePath: ((path: string) => void) | undefined;
+    onOpenWorkspacePath:
+        | ((path: string, options?: OpenWorkspacePathOptions) => void)
+        | undefined;
 }): ReactElement {
     const segment = parts.pathSegment;
     if (segment === undefined) {
@@ -69,7 +89,9 @@ function CompactVerbDetail({
     onOpenWorkspacePath,
 }: {
     parts: CompactToolDetailParts;
-    onOpenWorkspacePath: ((path: string) => void) | undefined;
+    onOpenWorkspacePath:
+        | ((path: string, options?: OpenWorkspacePathOptions) => void)
+        | undefined;
 }): ReactElement {
     return (
         <>
@@ -92,7 +114,9 @@ function CompactEditLine({
     onOpenWorkspacePath,
 }: {
     item: TraceToolItem;
-    onOpenWorkspacePath: ((path: string) => void) | undefined;
+    onOpenWorkspacePath:
+        | ((path: string, options?: OpenWorkspacePathOptions) => void)
+        | undefined;
 }): ReactElement {
     const parts = compactToolDetailParts(item);
     const { added, removed } = diffLineStats(item.diffRows);
@@ -129,7 +153,9 @@ function CompactDetailLine({
     onOpenWorkspacePath,
 }: {
     item: TraceToolItem;
-    onOpenWorkspacePath: ((path: string) => void) | undefined;
+    onOpenWorkspacePath:
+        | ((path: string, options?: OpenWorkspacePathOptions) => void)
+        | undefined;
 }): ReactElement {
     if (compactToolShowsDiffStats(item)) {
         return (
@@ -152,7 +178,9 @@ function CompactGroupSummary({
     onOpenWorkspacePath,
 }: {
     items: TraceToolItem[];
-    onOpenWorkspacePath: ((path: string) => void) | undefined;
+    onOpenWorkspacePath:
+        | ((path: string, options?: OpenWorkspacePathOptions) => void)
+        | undefined;
 }): ReactElement {
     const parts = compactToolGroupSummaryParts(items);
     if (parts === null) {
@@ -184,7 +212,10 @@ export function ToolCallCompactBlock({
 }: {
     items: TraceToolItem[];
     className?: string;
-    onOpenWorkspacePath?: (path: string) => void;
+    onOpenWorkspacePath?: (
+        path: string,
+        options?: OpenWorkspacePathOptions,
+    ) => void;
 }): ReactElement {
     const single = items.length === 1;
     const inProgress = items.some(

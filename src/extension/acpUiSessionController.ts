@@ -28,6 +28,7 @@ import {
     sessionConfigOptionsInReplayEvents,
 } from "../acp/session/sessionConfigOptionsCache";
 import { formatPathWithTilde } from "../platform/pathDisplay";
+import { openWorkspacePathTarget } from "../platform/openWorkspacePathTarget";
 import { resolveUserHomeDir } from "../platform/resolveUserHomeDir";
 import { resolveWorkspacePath } from "../platform/resolveWorkspacePath";
 import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";
@@ -590,12 +591,10 @@ export class AcpUiSessionController {
 
         if (parsed.type === "openWorkspacePath") {
             const workspaceRoot = workspace.workspaceFolders?.[0]?.uri.fsPath;
-            const absolute = resolveWorkspacePath(
-                parsed.path,
-                workspaceRoot,
-            );
+            const absolute = resolveWorkspacePath(parsed.path, workspaceRoot);
+            const uri = Uri.file(absolute);
             try {
-                await commands.executeCommand("vscode.open", Uri.file(absolute));
+                await openWorkspacePathTarget(uri, parsed.target);
             } catch {
                 void window.showErrorMessage(
                     `Could not open ${formatPathWithTilde(

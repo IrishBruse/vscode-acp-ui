@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import "./TraceList.css";
 import type { ToolCallVerbosity } from "../../../src/protocol/extensionHostMessages";
+import type { WorkspacePathOpenTarget } from "../../../src/protocol/extensionHostMessages";
 import type { TraceItem, TraceToolItem } from "../chatReducer";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { AgentThoughtBlock } from "./AgentThoughtBlock";
@@ -124,7 +125,10 @@ export function TraceList({
     expandAllToolOutputs: boolean;
     toolCallVerbosity: ToolCallVerbosity;
     onCollapseExpandAll?: () => void;
-    onOpenWorkspacePath?: (path: string) => void;
+    onOpenWorkspacePath?: (
+        path: string,
+        options?: { target?: WorkspacePathOpenTarget },
+    ) => void;
 }): ReactElement {
     const segments = partitionTraceSegments(
         items,

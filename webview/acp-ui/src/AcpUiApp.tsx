@@ -18,6 +18,7 @@ import { cycleSessionModePick } from "../../../src/acp/session/sessionConfigOpti
 import type {
   AcpUiSlashCommand,
   ToolCallVerbosity,
+  WorkspacePathOpenTarget,
 } from "../../../src/protocol/extensionHostMessages";
 import {
   type ChatAction,
@@ -68,7 +69,10 @@ export type AcpUiAppProps = {
   ) => void;
   postSavePromptHistory: (entries: string[]) => void;
   postOpenNewChat?: () => void;
-  postOpenWorkspacePath?: (path: string) => void;
+  postOpenWorkspacePath?: (
+    path: string,
+    options?: { target?: WorkspacePathOpenTarget },
+  ) => void;
   postPermissionResponse: (
     payload:
       | { requestId: string; selectedOptionId: string }

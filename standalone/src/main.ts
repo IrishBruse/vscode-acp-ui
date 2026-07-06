@@ -217,8 +217,14 @@ async function bootstrap(): Promise<void> {
                 },
                 undefined,
                 undefined,
-                (path) => {
-                    host.post({ type: "openWorkspacePath", path });
+                (path, options) => {
+                    host.post({
+                        type: "openWorkspacePath",
+                        path,
+                        ...(options?.target === "auto"
+                            ? { target: "auto" }
+                            : {}),
+                    });
                 },
             );
             return;

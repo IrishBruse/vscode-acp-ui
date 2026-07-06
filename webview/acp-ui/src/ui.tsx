@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import type { WorkspacePathOpenTarget } from "../../../src/protocol/extensionHostMessages";
 import { createRoot } from "react-dom/client";
 import type { ChatState, ExtensionMessageAfterInit, InitPayload } from "./chatReducer";
 import { AcpUiApp } from "./AcpUiApp";
@@ -53,7 +54,10 @@ export function mountChatView(
     }) => void,
     initialChatState?: ChatState,
     postOpenNewChat?: () => void,
-    postOpenWorkspacePath?: (path: string) => void,
+    postOpenWorkspacePath?: (
+        path: string,
+        options?: { target?: WorkspacePathOpenTarget },
+    ) => void,
 ): ChatView {
     root.replaceChildren();
     root.className = "root agent-root";

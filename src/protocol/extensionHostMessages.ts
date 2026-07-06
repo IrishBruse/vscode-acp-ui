@@ -43,6 +43,9 @@ export type AcpUiSlashCommand = {
     source?: string;
 };
 
+/** How a compact tool path link should open in the workbench. */
+export type WorkspacePathOpenTarget = "file" | "auto";
+
 /**
  * Messages sent from a webview (or other UI host) to the extension host.
  */
@@ -100,8 +103,12 @@ export type WebviewToExtensionMessage =
     | { type: "savePromptHistory"; entries: string[] }
     /** Open a new chat with the default agent (extension host handles creation). */
     | { type: "openNewChat" }
-    /** Open a workspace file from a compact tool path link. */
-    | { type: "openWorkspacePath"; path: string };
+    /** Open a workspace path from a compact tool link (`auto` reveals folders, opens files). */
+    | {
+          type: "openWorkspacePath";
+          path: string;
+          target?: WorkspacePathOpenTarget;
+      };
 
 /**
  * Messages sent from the extension host to a webview (or other UI host).
@@ -411,7 +418,17 @@ export function tryParseWebviewMessage(
         typeof record.path === "string" &&
         record.path.trim().length > 0
     ) {
-        return { type: "openWorkspacePath", path: record.path.trim() };
+        const target =
+            record.target === "auto" || record.target === "file"
+                ? record.target
+                : undefined;
+        return {
+            type: "openWorkspacePath",
+            path: record.path.trim(),
+            ...(target !== undefined && target !== "file"
+                ? { target }
+                : {}),
+        };
     }
     return null;
 }

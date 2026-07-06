@@ -16,6 +16,11 @@ export function expandTildeInPath(path: string): string {
     return trimmed;
 }
 
+/** Normalizes paths for stable workspace-root comparisons. */
+export function normalizePathForCompare(fsPath: string): string {
+    return fsPath.replace(/\\/g, "/").replace(/\/$/, "");
+}
+
 /** Resolves a workspace-relative or absolute tool path to an absolute filesystem path. */
 export function resolveWorkspacePath(
     path: string,
