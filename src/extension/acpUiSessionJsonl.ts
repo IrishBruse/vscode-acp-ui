@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { isAbsolute } from "node:path";
+import { basename, isAbsolute } from "node:path";
 import {
     type ExtensionContext,
     FileType,
@@ -13,16 +13,17 @@ import {
     ACP_UI_SESSION_FILE_SUFFIX,
     ACP_UI_SESSION_SCHEMA,
     type AcpUiSessionHeader,
-    type AcpUiSessionRecordDebug,
     type AcpUiSessionReplayEvent,
     createDebouncedBatchQueue,
     enqueueSessionFileWrite,
     immediateFlushSessionEventTypes,
     normalizePromptHistory,
     parseSessionFile,
+    parseSessionHeaderBlock,
     serializeSessionHeader,
     serializeSessionRecord,
     serializeSessionRpcRecord,
+    uniqueSessionFileBaseNameFromTitle,
 } from "./acpUiSessionJsonlFormat";
 
 export {
@@ -39,13 +40,16 @@ export {
     parseSessionEventLines,
     parseSessionEventLinesFromIndex,
     parseSessionFile,
+    parseSessionHeaderBlock,
     parseSessionHeaderLine,
     type SerializeSessionRpcRecordOptions,
     serializeSessionHeader,
     serializeSessionRecord,
     serializeSessionRpcRecord,
+    sessionFileBaseNameFromTitle,
     shouldDeferJsonlHistoryReplay,
     shouldPersistExtensionMessage,
+    uniqueSessionFileBaseNameFromTitle,
 } from "./acpUiSessionJsonlFormat";
 
 /**
@@ -97,6 +101,67 @@ export function sessionFileUriForId(
         resolveSessionsDirectoryUri(context),
         `${sessionId}${ACP_UI_SESSION_FILE_SUFFIX}`,
     );
+}
+
+async function listSessionFileNamesInDirectory(dir: Uri): Promise<Set<string>> {
+    try {
+        const entries = await workspace.fs.readDirectory(dir);
+        return new Set(
+            entries
+                .filter(
+                    ([name, fileType]) =>
+                        fileType === FileType.File &&
+                        name.endsWith(ACP_UI_SESSION_FILE_SUFFIX),
+                )
+                .map(([name]) => name),
+        );
+    } catch {
+        return new Set();
+    }
+}
+
+async function resolveSessionFileUriForTitle(
+    context: ExtensionContext,
+    title: string,
+    options?: { excludeUri?: Uri },
+): Promise<Uri> {
+    const dir = await ensureSessionsDirectory(context);
+    const used = await listSessionFileNamesInDirectory(dir);
+    const excludeFileName =
+        options?.excludeUri !== undefined
+            ? basename(options.excludeUri.fsPath)
+            : undefined;
+    const fileName = uniqueSessionFileBaseNameFromTitle(
+        title,
+        used,
+        excludeFileName,
+    );
+    return Uri.joinPath(dir, fileName);
+}
+
+function sessionFileNamesMatch(current: string, expected: string): boolean {
+    return current.toLowerCase() === expected.toLowerCase();
+}
+
+/**
+ * Renames a session file when its path does not match the chat title.
+ * Returns the URI editors should use (unchanged when already correct).
+ */
+export async function ensureSessionFileNameMatchesTitle(
+    context: ExtensionContext,
+    uri: Uri,
+    title: string,
+): Promise<Uri> {
+    const targetUri = await resolveSessionFileUriForTitle(context, title, {
+        excludeUri: uri,
+    });
+    const currentName = basename(uri.fsPath);
+    const targetName = basename(targetUri.fsPath);
+    if (sessionFileNamesMatch(currentName, targetName)) {
+        return uri;
+    }
+    await workspace.fs.rename(uri, targetUri, { overwrite: false });
+    return targetUri;
 }
 
 async function ensureSessionsDirectory(
@@ -154,7 +219,7 @@ export async function createSessionFile(
 ): Promise<{ id: string; uri: Uri; header: AcpUiSessionHeader }> {
     await ensureSessionsDirectory(context);
     const header = buildSessionHeader(title, options);
-    const uri = sessionFileUriForId(context, header.id);
+    const uri = await resolveSessionFileUriForTitle(context, header.title);
     const content = serializeSessionHeader(header);
     await workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
     return { id: header.id, uri, header };
@@ -251,13 +316,8 @@ export async function clearSessionFileLog(
 export async function appendSessionEvent(
     uri: Uri,
     event: AcpUiSessionReplayEvent,
-    debug?: Partial<AcpUiSessionRecordDebug>,
 ): Promise<void> {
-    const block = serializeSessionRecord(event, {
-        record: "event",
-        type: event.type,
-        ...debug,
-    });
+    const block = serializeSessionRecord(event);
     await sessionFileAppendQueue.enqueue(
         uri.toString(),
         block,
@@ -275,12 +335,7 @@ export async function appendSessionEvents(
     if (events.length === 0) {
         return;
     }
-    const blocks = events.map((event) =>
-        serializeSessionRecord(event, {
-            record: "event",
-            type: event.type,
-        }),
-    );
+    const blocks = events.map((event) => serializeSessionRecord(event));
     await sessionFileAppendQueue.enqueueMany(uri.toString(), blocks, true);
 }
 
@@ -316,8 +371,8 @@ export async function updateSessionHeader(
 ): Promise<AcpUiSessionHeader | null> {
     await flushPendingSessionFileWrites(uri);
     const doc = await workspace.openTextDocument(uri);
-    const parsed = parseSessionFile(doc.getText());
-    if (parsed.header === null) {
+    const parsed = parseSessionHeaderBlock(doc.getText());
+    if (parsed === null) {
         return null;
     }
     const next: AcpUiSessionHeader = {
@@ -364,15 +419,15 @@ export async function updateSessionHeader(
     ) {
         delete next.promptHistory;
     }
-    const firstLine = doc.lineAt(0);
+    const lastHeaderLine = parsed.consumedLines - 1;
+    const headerRange = new Range(
+        doc.positionAt(0),
+        doc.lineAt(lastHeaderLine).rangeIncludingLineBreak.end,
+    );
     await applySessionFileEdit(
         uri,
         (edit) => {
-            edit.replace(
-                uri,
-                firstLine.rangeIncludingLineBreak,
-                serializeSessionHeader(next),
-            );
+            edit.replace(uri, headerRange, serializeSessionHeader(next));
         },
         `Failed to update session header for ${uri.fsPath}`,
     );

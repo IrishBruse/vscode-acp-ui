@@ -13,6 +13,7 @@ import { getActiveAgentConfig } from "./acpUiActiveAgent";
 import { pickAcpAgentConfig } from "./acpUiAgentPicker";
 import {
     acpUiCustomEditorViewType,
+    moveAcpUiCustomEditorUri,
     setAcpUiCustomEditorRefreshHandler,
     setAcpUiCustomEditorTabTitle,
 } from "./acpUiCustomEditorProvider";
@@ -31,12 +32,17 @@ export async function renameAcpUiSessionTitle(
     sessionId: string,
     nextTitle: string,
 ): Promise<boolean> {
+    const before = getAcpUiSession(sessionId);
+    const oldUri = before?.uri;
     const renamed = await renameAcpUiSession(sessionId, nextTitle);
     if (!renamed) {
         return false;
     }
     const record = getAcpUiSession(sessionId);
     if (record !== undefined) {
+        if (oldUri !== undefined) {
+            moveAcpUiCustomEditorUri(oldUri, record.uri);
+        }
         setAcpUiCustomEditorTabTitle(record.uri, nextTitle);
     }
     refreshChatsListHandler?.();

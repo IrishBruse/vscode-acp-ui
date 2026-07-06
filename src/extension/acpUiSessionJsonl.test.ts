@@ -6,13 +6,16 @@ import {
     isReplayableSessionEvent,
     parseSessionEventLines,
     parseSessionFile,
+    parseSessionHeaderBlock,
     parseSessionHeaderLine,
     parseSessionRecordAtLine,
     serializeSessionHeader,
     serializeSessionRecord,
     serializeSessionRpcRecord,
+    sessionFileBaseNameFromTitle,
     shouldDeferJsonlHistoryReplay,
     shouldPersistExtensionMessage,
+    uniqueSessionFileBaseNameFromTitle,
 } from "./acpUiSessionJsonlFormat";
 
 describe("enqueueSessionFileWrite", () => {
@@ -117,37 +120,46 @@ describe("createDebouncedBatchQueue", () => {
     });
 });
 
-describe("serializeSessionRecord", () => {
-    it("writes a debug comment line then pretty-printed JSON", () => {
-        const block = serializeSessionRecord(
-            { type: "submit", body: "hi" },
-            { record: "event", type: "submit", durationMs: 42 },
+describe("sessionFileBaseNameFromTitle", () => {
+    it("sanitizes invalid characters and appends .acp", () => {
+        expect(sessionFileBaseNameFromTitle("Fix auth flow")).toBe(
+            "Fix auth flow.acp",
         );
-        const lines = block.trimEnd().split("\n");
-        expect(lines[0]).toBe("// event submit | 42ms");
-        expect(lines[1]).toBe("{");
-        expect(lines[2]).toContain('"type": "submit"');
-        const parsed = parseSessionRecordAtLine(lines, 0);
-        expect(parsed?.value).toEqual({ type: "submit", body: "hi" });
+        expect(sessionFileBaseNameFromTitle('bad<>:"/\\|?*name')).toBe(
+            "badname.acp",
+        );
     });
 
-    it("formats rpc responses like the debug comment example", () => {
-        const payload = {
-            jsonrpc: "2.0",
-            id: 0,
-            result: { protocolVersion: 1 },
-        };
-        const block = serializeSessionRecord(payload, {
-            record: "rpc",
-            method: "initialize",
-            durationMs: 100,
-            direction: "fromAgent",
-        });
+    it("falls back when the title is empty after sanitization", () => {
+        expect(sessionFileBaseNameFromTitle("   ")).toBe("Chat.acp");
+    });
+});
+
+describe("uniqueSessionFileBaseNameFromTitle", () => {
+    it("adds a numeric suffix when the base name is taken", () => {
+        const used = new Set(["Chat 1.acp"]);
+        expect(uniqueSessionFileBaseNameFromTitle("Chat 1", used)).toBe(
+            "Chat 1 (2).acp",
+        );
+    });
+
+    it("keeps the current file name when excluding it", () => {
+        const used = new Set(["Chat 1.acp", "Chat 2.acp"]);
         expect(
-            block.startsWith("// initialize | 100ms | from agent\n{\n"),
-        ).toBe(true);
+            uniqueSessionFileBaseNameFromTitle("Chat 1", used, "Chat 1.acp"),
+        ).toBe("Chat 1.acp");
+    });
+});
+
+describe("serializeSessionRecord", () => {
+    it("writes pretty-printed JSON without a debug comment line", () => {
+        const block = serializeSessionRecord({ type: "submit", body: "hi" });
+        expect(block.startsWith("//")).toBe(false);
+        expect(block).toBe(
+            `${JSON.stringify({ type: "submit", body: "hi" }, null, 2)}\n`,
+        );
         const parsed = parseSessionRecordAtLine(block.trimEnd().split("\n"), 0);
-        expect(parsed?.value).toEqual(payload);
+        expect(parsed?.value).toEqual({ type: "submit", body: "hi" });
     });
 });
 
@@ -178,7 +190,7 @@ describe("serializeSessionRpcRecord", () => {
 });
 
 describe("serializeSessionHeader", () => {
-    it("writes compact JSON without a debug comment line", () => {
+    it("writes pretty-printed JSON without a debug comment line", () => {
         const header = {
             schema: ACP_UI_SESSION_SCHEMA,
             id: "id-1",
@@ -187,9 +199,33 @@ describe("serializeSessionHeader", () => {
             updatedAt: 2,
         };
         const line = serializeSessionHeader(header);
-        expect(line).toBe(`${JSON.stringify(header)}\n`);
+        expect(line).toBe(`${JSON.stringify(header, null, 2)}\n`);
         expect(line.startsWith("//")).toBe(false);
-        expect(parseSessionHeaderLine(line)).toEqual(header);
+        const parsed = parseSessionFile(`${line.trimEnd()}\n`);
+        expect(parsed.header).toEqual(header);
+    });
+});
+
+describe("parseSessionHeaderBlock", () => {
+    it("spans all lines of a pretty-printed header", () => {
+        const header = {
+            schema: ACP_UI_SESSION_SCHEMA,
+            id: "id-1",
+            title: "Chat",
+            createdAt: 1,
+            updatedAt: 2,
+        };
+        const text = [
+            serializeSessionHeader(header).trimEnd(),
+            serializeSessionRecord({ type: "submit", body: "hi" }).trimEnd(),
+        ].join("\n");
+        const parsed = parseSessionHeaderBlock(text);
+        expect(parsed?.header).toEqual(header);
+        expect(parsed?.consumedLines).toBeGreaterThan(1);
+        const lines = text.split("\n");
+        expect(lines.slice(0, parsed?.consumedLines).join("\n")).toBe(
+            serializeSessionHeader(header).trimEnd(),
+        );
     });
 });
 
@@ -227,14 +263,11 @@ describe("parseSessionFile", () => {
         };
         const text = [
             serializeSessionHeader(header).trimEnd(),
-            serializeSessionRecord(
-                { type: "submit", body: "hi" },
-                { record: "event", type: "submit" },
-            ).trimEnd(),
-            serializeSessionRecord(
-                { type: "appendAgentText", text: "hello" },
-                { record: "event", type: "appendAgentText" },
-            ).trimEnd(),
+            serializeSessionRecord({ type: "submit", body: "hi" }).trimEnd(),
+            serializeSessionRecord({
+                type: "appendAgentText",
+                text: "hello",
+            }).trimEnd(),
             "",
         ].join("\n");
         const parsed = parseSessionFile(text);
@@ -281,10 +314,10 @@ describe("parseSessionFile", () => {
             method: "session/prompt",
             id: 1,
         }).trimEnd();
-        const event = serializeSessionRecord(
-            { type: "submit", body: "x" },
-            { record: "event", type: "submit" },
-        ).trimEnd();
+        const event = serializeSessionRecord({
+            type: "submit",
+            body: "x",
+        }).trimEnd();
         const parsed = parseSessionFile(`${header}\n${rpc}\n${event}\n`);
         expect(parsed.events).toEqual([{ type: "submit", body: "x" }]);
     });
@@ -341,12 +374,7 @@ describe("append and replay round-trip", () => {
         ];
         const lines = [serializeSessionHeader(header).trimEnd()];
         for (const event of events) {
-            lines.push(
-                serializeSessionRecord(event, {
-                    record: "event",
-                    type: event.type,
-                }).trimEnd(),
-            );
+            lines.push(serializeSessionRecord(event).trimEnd());
         }
         const parsed = parseSessionFile(`${lines.join("\n")}\n`);
         expect(parsed.header?.id).toBe("ui-session-uuid");

@@ -37,7 +37,10 @@ import type {
     ExtensionToWebviewMessage,
 } from "../protocol/extensionHostMessages";
 import { tryParseWebviewMessage } from "../protocol/extensionHostMessages";
-import { setAcpUiCustomEditorTabTitle } from "./acpUiCustomEditorProvider";
+import {
+    moveAcpUiCustomEditorUri,
+    setAcpUiCustomEditorTabTitle,
+} from "./acpUiCustomEditorProvider";
 import { AcpUiSessionFileRpcSink } from "./acpUiSessionFileRpcSink";
 import {
     type AcpUiSessionHeader,
@@ -54,6 +57,7 @@ import {
 } from "./acpUiSessionJsonl";
 import {
     clearAcpUiSessionRuntimeSessionId,
+    getAcpUiSession,
     renameAcpUiSession,
     setAcpUiSessionAgentName,
     setAcpUiSessionRuntimeSessionId,
@@ -74,7 +78,6 @@ type SessionControllerOptions = {
  */
 export class AcpUiSessionController {
     private readonly sessionId: string;
-    private readonly documentUri: Uri;
     private bridge: AcpSessionBridge | undefined;
     private bridgeConnectInFlight:
         | Promise<AcpSessionBridge | undefined>
@@ -90,7 +93,6 @@ export class AcpUiSessionController {
     private readonly disposables: Array<{ dispose(): void }> = [];
 
     constructor(private readonly options: SessionControllerOptions) {
-        this.documentUri = options.document.uri;
         const parsed = parseSessionFile(options.document.getText());
         if (parsed.header === null) {
             throw new Error("Session file is missing a valid header line.");
@@ -103,6 +105,10 @@ export class AcpUiSessionController {
                 ? (getAcpAgentConfigByName(named) ?? configs[0])
                 : configs[0];
         this.replayedEventCount = parsed.events.length;
+    }
+
+    private get documentUri(): Uri {
+        return this.options.document.uri;
     }
 
     activate(): void {
@@ -408,9 +414,15 @@ export class AcpUiSessionController {
             return;
         }
         const nextTitle = title.trim();
+        const before = getAcpUiSession(this.sessionId);
+        const oldUri = before?.uri;
         const renamed = await renameAcpUiSession(this.sessionId, nextTitle);
         if (renamed) {
-            setAcpUiCustomEditorTabTitle(this.documentUri, nextTitle);
+            const record = getAcpUiSession(this.sessionId);
+            if (record !== undefined && oldUri !== undefined) {
+                moveAcpUiCustomEditorUri(oldUri, record.uri);
+                setAcpUiCustomEditorTabTitle(record.uri, nextTitle);
+            }
             this.options.refreshChatsList?.();
         }
     }
@@ -651,9 +663,15 @@ export class AcpUiSessionController {
                 });
                 return;
             }
+            const before = getAcpUiSession(this.sessionId);
+            const oldUri = before?.uri;
             const renamed = await renameAcpUiSession(this.sessionId, nextTitle);
             if (renamed) {
-                setAcpUiCustomEditorTabTitle(this.documentUri, nextTitle);
+                const record = getAcpUiSession(this.sessionId);
+                if (record !== undefined && oldUri !== undefined) {
+                    moveAcpUiCustomEditorUri(oldUri, record.uri);
+                    setAcpUiCustomEditorTabTitle(record.uri, nextTitle);
+                }
                 this.options.refreshChatsList?.();
             }
             this.post({

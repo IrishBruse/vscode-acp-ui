@@ -3,6 +3,71 @@ import type { ExtensionToWebviewMessage } from "../protocol/extensionHostMessage
 export const ACP_UI_SESSION_SCHEMA = "acpUi/session/1" as const;
 export const ACP_UI_SESSION_FILE_SUFFIX = ".acp";
 
+const sessionTitleFileNameMaxLength = 120;
+const invalidSessionFileNameChars = /[<>:"/\\|?*]/g;
+
+function stripControlCharacters(value: string): string {
+    let out = "";
+    for (const ch of value) {
+        const code = ch.charCodeAt(0);
+        if (code >= 32) {
+            out += ch;
+        }
+    }
+    return out;
+}
+
+/**
+ * Maps a chat title to a safe `.acp` file base name (including suffix).
+ */
+export function sessionFileBaseNameFromTitle(title: string): string {
+    let sanitized = stripControlCharacters(title)
+        .trim()
+        .replace(invalidSessionFileNameChars, "")
+        .replace(/\s+/g, " ")
+        .replace(/[. ]+$/g, "");
+    if (sanitized.length === 0) {
+        sanitized = "Chat";
+    }
+    if (sanitized.length > sessionTitleFileNameMaxLength) {
+        sanitized = sanitized.slice(0, sessionTitleFileNameMaxLength).trim();
+    }
+    if (sanitized.length === 0) {
+        sanitized = "Chat";
+    }
+    return `${sanitized}${ACP_UI_SESSION_FILE_SUFFIX}`;
+}
+
+/**
+ * Picks a unique `.acp` file name for `title` among `usedFileNames` (case-insensitive).
+ */
+export function uniqueSessionFileBaseNameFromTitle(
+    title: string,
+    usedFileNames: ReadonlySet<string>,
+    excludeFileName?: string,
+): string {
+    const excludeKey = excludeFileName?.toLowerCase();
+    const reserved = new Set(
+        [...usedFileNames]
+            .map((name) => name.toLowerCase())
+            .filter((name) => name !== excludeKey),
+    );
+    const first = sessionFileBaseNameFromTitle(title);
+    if (!reserved.has(first.toLowerCase())) {
+        return first;
+    }
+    const stem = first.slice(0, -ACP_UI_SESSION_FILE_SUFFIX.length);
+    let suffix = 2;
+    while (suffix < 10_000) {
+        const candidate = `${stem} (${suffix})${ACP_UI_SESSION_FILE_SUFFIX}`;
+        if (!reserved.has(candidate.toLowerCase())) {
+            return candidate;
+        }
+        suffix += 1;
+    }
+    return first;
+}
+
 /** Separator between debug fields on the `//` comment line above each record. */
 export const ACP_UI_SESSION_DEBUG_FIELD_SEPARATOR = " | ";
 
@@ -150,7 +215,7 @@ export const immediateFlushSessionEventTypes = new Set<string>([
 ]);
 
 /**
- * Debug metadata shown on the `//` comment line above each JSON block.
+ * Debug metadata for legacy `//` comment records (read-only).
  */
 export type AcpUiSessionRecordDebug = {
     record?: "header" | "event" | "rpc";
@@ -161,43 +226,10 @@ export type AcpUiSessionRecordDebug = {
 };
 
 /**
- * Builds the pipe-separated debug line shown above each JSON block.
+ * Serializes a replay event or other session record as indented JSON (no comment line).
  */
-export function formatSessionRecordDebug(
-    debug: AcpUiSessionRecordDebug,
-): string {
-    const parts: string[] = [];
-    if (debug.method !== undefined) {
-        parts.push(debug.method);
-    } else if (debug.record === "header") {
-        parts.push("session header");
-    } else if (debug.record === "event" && debug.type !== undefined) {
-        parts.push(`event ${debug.type}`);
-    } else if (debug.record === "rpc") {
-        parts.push("rpc");
-    }
-    if (debug.durationMs !== undefined) {
-        parts.push(`${debug.durationMs}ms`);
-    }
-    if (debug.direction !== undefined) {
-        parts.push(debug.direction === "toAgent" ? "to agent" : "from agent");
-    }
-    if (parts.length === 0) {
-        parts.push("record");
-    }
-    return parts.join(ACP_UI_SESSION_DEBUG_FIELD_SEPARATOR);
-}
-
-/**
- * Serializes a value as a `//` debug comment line plus indented JSON.
- */
-export function serializeSessionRecord(
-    value: unknown,
-    debug: AcpUiSessionRecordDebug = {},
-): string {
-    const debugText = formatSessionRecordDebug(debug);
-    const pretty = JSON.stringify(value, null, 2);
-    return `// ${debugText}\n${pretty}\n`;
+export function serializeSessionRecord(value: unknown): string {
+    return `${JSON.stringify(value, null, 2)}\n`;
 }
 
 export type SerializeSessionRpcRecordOptions = {
@@ -539,10 +571,32 @@ export function parseSessionHeaderLine(
 }
 
 /**
- * Serializes a session header as one compact JSON line.
+ * Serializes a session header as indented JSON.
  */
 export function serializeSessionHeader(header: AcpUiSessionHeader): string {
-    return `${JSON.stringify(header)}\n`;
+    return serializeSessionRecord(header);
+}
+
+/**
+ * Parses the header block at the start of a session file, including line span.
+ */
+export function parseSessionHeaderBlock(text: string): {
+    header: AcpUiSessionHeader;
+    consumedLines: number;
+} | null {
+    const lines = text.split(/\r?\n/);
+    if (lines.length === 0) {
+        return null;
+    }
+    const record = parseSessionRecordAtLine(lines, 0);
+    if (record === null) {
+        return null;
+    }
+    const header = headerFromParsedValue(record.value);
+    if (header === null) {
+        return null;
+    }
+    return { header, consumedLines: record.consumedLines };
 }
 
 function parseSessionReplayEventsFromLines(

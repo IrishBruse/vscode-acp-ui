@@ -7,9 +7,14 @@ import {
     type Uri,
     type WebviewPanel,
     window,
+    workspace,
 } from "vscode";
 import { AcpUiSessionController } from "./acpUiSessionController";
-import { parseSessionFile } from "./acpUiSessionJsonl";
+import {
+    ensureSessionFileNameMatchesTitle,
+    parseSessionFile,
+} from "./acpUiSessionJsonl";
+import { updateAcpUiSessionFileUri } from "./acpUiSessionsStore";
 import { getAcpUiWebviewHtml } from "./acpUiWebviewShell";
 
 export const acpUiCustomEditorViewType = "ibAcpUi.session";
@@ -29,6 +34,24 @@ export function setAcpUiCustomEditorTabTitle(uri: Uri, title: string): void {
     const panel = panelsByDocumentUri.get(uri.toString());
     if (panel !== undefined) {
         panel.title = trimmed;
+    }
+}
+
+export function moveAcpUiCustomEditorUri(from: Uri, to: Uri): void {
+    const fromKey = from.toString();
+    const toKey = to.toString();
+    if (fromKey === toKey) {
+        return;
+    }
+    const panel = panelsByDocumentUri.get(fromKey);
+    if (panel !== undefined) {
+        panelsByDocumentUri.delete(fromKey);
+        panelsByDocumentUri.set(toKey, panel);
+    }
+    const controller = controllersByDocumentUri.get(fromKey);
+    if (controller !== undefined) {
+        controllersByDocumentUri.delete(fromKey);
+        controllersByDocumentUri.set(toKey, controller);
     }
 }
 
@@ -56,6 +79,17 @@ export class AcpUiCustomEditorProvider implements CustomTextEditorProvider {
             return;
         }
 
+        const sessionUri = await ensureSessionFileNameMatchesTitle(
+            this.context,
+            document.uri,
+            parsed.header.title,
+        );
+        updateAcpUiSessionFileUri(parsed.header.id, sessionUri);
+        const sessionDocument =
+            sessionUri.toString() === document.uri.toString()
+                ? document
+                : await workspace.openTextDocument(sessionUri);
+
         webviewPanel.webview.options = {
             enableScripts: true,
             localResourceRoots: [this.context.extensionUri],
@@ -69,11 +103,11 @@ export class AcpUiCustomEditorProvider implements CustomTextEditorProvider {
 
         const controller = new AcpUiSessionController({
             context: this.context,
-            document,
+            document: sessionDocument,
             webview: webviewPanel.webview,
             refreshChatsList: refreshChatsListHandler,
         });
-        const uriKey = document.uri.toString();
+        const uriKey = sessionDocument.uri.toString();
         controllersByDocumentUri.set(uriKey, controller);
         panelsByDocumentUri.set(uriKey, webviewPanel);
         controller.activate();

@@ -4,6 +4,7 @@ import { getAcpUiPromptHistoryEntries } from "./acpUiPromptHistoryMemento";
 import {
     createSessionFile,
     deleteSessionFile,
+    ensureSessionFileNameMatchesTitle,
     listSessionHeaders,
     setAcpUiSessionJsonlLogger,
     updateSessionHeader,
@@ -199,6 +200,16 @@ export function getAcpUiSession(id: string): AcpUiSessionRecord | undefined {
 }
 
 /**
+ * Updates the on-disk path for a session after its `.acp` file is renamed.
+ */
+export function updateAcpUiSessionFileUri(id: string, uri: Uri): void {
+    const row = sessions.find((s) => s.id === id);
+    if (row !== undefined) {
+        row.uri = uri;
+    }
+}
+
+/**
  * Returns the session id currently selected in the Chats list, if any.
  */
 export function getActiveAcpUiSessionId(): string | null {
@@ -327,5 +338,12 @@ export async function renameAcpUiSession(
     row.title = title;
     row.updatedAt = Date.now();
     await updateSessionHeader(row.uri, { title, updatedAt: row.updatedAt });
+    if (extensionContext !== null) {
+        row.uri = await ensureSessionFileNameMatchesTitle(
+            extensionContext,
+            row.uri,
+            title,
+        );
+    }
     return true;
 }
