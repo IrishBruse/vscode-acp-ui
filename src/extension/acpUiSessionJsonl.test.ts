@@ -10,6 +10,7 @@ import {
     parseSessionRecordAtLine,
     serializeSessionHeader,
     serializeSessionRecord,
+    serializeSessionRpcRecord,
     shouldDeferJsonlHistoryReplay,
     shouldPersistExtensionMessage,
 } from "./acpUiSessionJsonlFormat";
@@ -150,6 +151,48 @@ describe("serializeSessionRecord", () => {
     });
 });
 
+describe("serializeSessionRpcRecord", () => {
+    it("writes compact JSON by default", () => {
+        const payload = {
+            jsonrpc: "2.0",
+            method: "session/prompt",
+            id: 1,
+        };
+        const block = serializeSessionRpcRecord(payload);
+        expect(block).toBe(`${JSON.stringify(payload)}\n`);
+        const parsed = parseSessionRecordAtLine(block.trimEnd().split("\n"), 0);
+        expect(parsed?.value).toEqual(payload);
+    });
+
+    it("pretty-prints when requested", () => {
+        const payload = {
+            jsonrpc: "2.0",
+            id: 0,
+            result: { protocolVersion: 1 },
+        };
+        const block = serializeSessionRpcRecord(payload, { pretty: true });
+        expect(block).toBe(`${JSON.stringify(payload, null, 2)}\n`);
+        const parsed = parseSessionRecordAtLine(block.trimEnd().split("\n"), 0);
+        expect(parsed?.value).toEqual(payload);
+    });
+});
+
+describe("serializeSessionHeader", () => {
+    it("writes compact JSON without a debug comment line", () => {
+        const header = {
+            schema: ACP_UI_SESSION_SCHEMA,
+            id: "id-1",
+            title: "Chat",
+            createdAt: 1,
+            updatedAt: 2,
+        };
+        const line = serializeSessionHeader(header);
+        expect(line).toBe(`${JSON.stringify(header)}\n`);
+        expect(line.startsWith("//")).toBe(false);
+        expect(parseSessionHeaderLine(line)).toEqual(header);
+    });
+});
+
 describe("parseSessionHeaderLine", () => {
     it("parses a valid legacy single-line header", () => {
         const header = {
@@ -233,14 +276,11 @@ describe("parseSessionFile", () => {
             createdAt: 1,
             updatedAt: 2,
         }).trimEnd();
-        const rpc = serializeSessionRecord(
-            { jsonrpc: "2.0", method: "session/prompt", id: 1 },
-            {
-                record: "rpc",
-                method: "session/prompt",
-                direction: "toAgent",
-            },
-        ).trimEnd();
+        const rpc = serializeSessionRpcRecord({
+            jsonrpc: "2.0",
+            method: "session/prompt",
+            id: 1,
+        }).trimEnd();
         const event = serializeSessionRecord(
             { type: "submit", body: "x" },
             { record: "event", type: "submit" },

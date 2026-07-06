@@ -107,6 +107,11 @@
                     "default": "",
                     "description": "Directory for chat .acp files. Empty uses extension global storage. Absolute path or workspace-relative."
                 },
+                "ib-acp-ui.sessionFilePrettyRpc": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Pretty-print ACP JSON-RPC records appended to chat .acp files. When false, each record is one compact JSON line."
+                },
                 "ib-acp-ui.toolCallVerbosity": {
                     "type": "string",
                     "enum": [

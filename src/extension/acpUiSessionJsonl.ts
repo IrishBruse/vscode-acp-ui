@@ -22,6 +22,7 @@ import {
     parseSessionFile,
     serializeSessionHeader,
     serializeSessionRecord,
+    serializeSessionRpcRecord,
 } from "./acpUiSessionJsonlFormat";
 
 export {
@@ -39,8 +40,10 @@ export {
     parseSessionEventLinesFromIndex,
     parseSessionFile,
     parseSessionHeaderLine,
+    type SerializeSessionRpcRecordOptions,
     serializeSessionHeader,
     serializeSessionRecord,
+    serializeSessionRpcRecord,
     shouldDeferJsonlHistoryReplay,
     shouldPersistExtensionMessage,
 } from "./acpUiSessionJsonlFormat";
@@ -51,6 +54,7 @@ export {
  * When load succeeds, the log is cleared and agent replay becomes the source of truth.
  */
 const sessionsDirectorySettingKey = "ib-acp-ui.sessionsDirectory";
+const sessionFilePrettyRpcSettingKey = "ib-acp-ui.sessionFilePrettyRpc";
 const chatsSubdir = "chats";
 
 let logWarn: ((message: string) => void) | null = null;
@@ -151,7 +155,7 @@ export async function createSessionFile(
     await ensureSessionsDirectory(context);
     const header = buildSessionHeader(title, options);
     const uri = sessionFileUriForId(context, header.id);
-    const content = `${serializeSessionHeader(header)}\n`;
+    const content = serializeSessionHeader(header);
     await workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
     return { id: header.id, uri, header };
 }
@@ -223,7 +227,7 @@ export async function clearSessionFileLog(
     if (parsed.header === null) {
         return null;
     }
-    const content = `${serializeSessionHeader(parsed.header)}\n`;
+    const content = serializeSessionHeader(parsed.header);
     await enqueueSessionFileWrite(uri.toString(), async () => {
         const latest = await workspace.openTextDocument(uri);
         const edit = new WorkspaceEdit();
@@ -286,12 +290,11 @@ export async function appendSessionEvents(
 export async function appendSessionRpcRecord(
     uri: Uri,
     payload: unknown,
-    debug: AcpUiSessionRecordDebug,
 ): Promise<void> {
-    const block = serializeSessionRecord(payload, {
-        record: "rpc",
-        ...debug,
-    });
+    const pretty = workspace
+        .getConfiguration()
+        .get<boolean>(sessionFilePrettyRpcSettingKey, false);
+    const block = serializeSessionRpcRecord(payload, { pretty });
     await sessionFileAppendQueue.enqueue(uri.toString(), block);
 }
 
@@ -368,7 +371,7 @@ export async function updateSessionHeader(
             edit.replace(
                 uri,
                 firstLine.rangeIncludingLineBreak,
-                `${serializeSessionHeader(next)}\n`,
+                serializeSessionHeader(next),
             );
         },
         `Failed to update session header for ${uri.fsPath}`,

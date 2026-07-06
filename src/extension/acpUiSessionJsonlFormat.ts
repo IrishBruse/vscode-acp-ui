@@ -200,52 +200,33 @@ export function serializeSessionRecord(
     return `// ${debugText}\n${pretty}\n`;
 }
 
+export type SerializeSessionRpcRecordOptions = {
+    /** When true, writes indented JSON. Default is compact single-line JSON. */
+    pretty?: boolean;
+};
+
 /**
- * Parses one session file record starting at `lineIndex`.
- * Supports legacy single-line JSON, legacy per-line comment prefixes, and
- * comment-line + pretty JSON blocks.
+ * Serializes one ACP JSON-RPC payload for the session file (no debug comment line).
  */
-export function parseSessionRecordAtLine(
+export function serializeSessionRpcRecord(
+    value: unknown,
+    options: SerializeSessionRpcRecordOptions = {},
+): string {
+    const json =
+        options.pretty === true
+            ? JSON.stringify(value, null, 2)
+            : JSON.stringify(value);
+    return `${json}\n`;
+}
+
+function parseMultiLineJsonBlock(
     lines: string[],
     lineIndex: number,
 ): { value: unknown; consumedLines: number } | null {
-    let index = lineIndex;
-    while (index < lines.length && lines[index]?.trim() === "") {
-        index += 1;
-    }
-    if (index >= lines.length) {
-        return null;
-    }
-
-    const first = lines[index]?.trim() ?? "";
-    if (first.startsWith("{") || first.startsWith("[")) {
-        try {
-            return {
-                value: JSON.parse(first),
-                consumedLines: index - lineIndex + 1,
-            };
-        } catch {
-            return null;
-        }
-    }
-
-    if (!first.startsWith("// ")) {
-        return null;
-    }
-
-    const legacyPerLine = parseLegacyPerLineCommentRecord(lines, index);
-    if (legacyPerLine !== null) {
-        return legacyPerLine;
-    }
-
-    let cursor = index + 1;
-    while (cursor < lines.length && lines[cursor]?.trim() === "") {
-        cursor += 1;
-    }
-
     const jsonParts: string[] = [];
     let depth = 0;
     let started = false;
+    let cursor = lineIndex;
     while (cursor < lines.length) {
         const trimmed = lines[cursor]?.trim() ?? "";
         if (trimmed.length === 0) {
@@ -284,6 +265,61 @@ export function parseSessionRecordAtLine(
     } catch {
         return null;
     }
+}
+
+/**
+ * Parses one session file record starting at `lineIndex`.
+ * Supports legacy single-line JSON, legacy per-line comment prefixes, and
+ * comment-line + pretty JSON blocks.
+ */
+export function parseSessionRecordAtLine(
+    lines: string[],
+    lineIndex: number,
+): { value: unknown; consumedLines: number } | null {
+    let index = lineIndex;
+    while (index < lines.length && lines[index]?.trim() === "") {
+        index += 1;
+    }
+    if (index >= lines.length) {
+        return null;
+    }
+
+    const first = lines[index]?.trim() ?? "";
+    if (first.startsWith("{") || first.startsWith("[")) {
+        try {
+            return {
+                value: JSON.parse(first),
+                consumedLines: index - lineIndex + 1,
+            };
+        } catch {
+            const multiLine = parseMultiLineJsonBlock(lines, index);
+            if (multiLine !== null) {
+                return {
+                    value: multiLine.value,
+                    consumedLines: index - lineIndex + multiLine.consumedLines,
+                };
+            }
+            return null;
+        }
+    }
+
+    if (!first.startsWith("// ")) {
+        return null;
+    }
+
+    const legacyPerLine = parseLegacyPerLineCommentRecord(lines, index);
+    if (legacyPerLine !== null) {
+        return legacyPerLine;
+    }
+
+    const multiLine = parseMultiLineJsonBlock(lines, index + 1);
+    if (multiLine === null) {
+        return null;
+    }
+    return {
+        value: multiLine.value,
+        consumedLines: index - lineIndex + 1 + multiLine.consumedLines,
+    };
 }
 
 function parseLegacyPerLineCommentRecord(
@@ -503,10 +539,10 @@ export function parseSessionHeaderLine(
 }
 
 /**
- * Serializes a session header as a `//` debug line plus pretty JSON.
+ * Serializes a session header as one compact JSON line.
  */
 export function serializeSessionHeader(header: AcpUiSessionHeader): string {
-    return serializeSessionRecord(header, { record: "header" });
+    return `${JSON.stringify(header)}\n`;
 }
 
 function parseSessionReplayEventsFromLines(
