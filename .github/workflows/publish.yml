@@ -2,12 +2,19 @@ on:
     push:
         paths:
             - "package.json"
+    workflow_dispatch:
+        inputs:
+            force:
+                description: Publish even if package version is unchanged
+                required: false
+                default: false
+                type: boolean
 
 name: Deploy Extension
 
 jobs:
     publish:
-        if: "!contains(github.event.head_commit.message, '[skip publish]')"
+        if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip publish]')
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -17,6 +24,11 @@ jobs:
             - name: Check version changed
               id: version
               run: |
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
+                    echo "Force publish requested"
+                    echo "skip=false" >> "$GITHUB_OUTPUT"
+                    exit 0
+                  fi
                   current=$(jq -r .version package.json)
                   previous=$(git show HEAD~1:package.json | jq -r .version)
                   if [ "$current" = "$previous" ]; then
