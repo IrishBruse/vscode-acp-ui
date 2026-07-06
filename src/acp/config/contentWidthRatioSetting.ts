@@ -1,24 +1,24 @@
 import { workspace } from "vscode";
 
-const settingKey = "ib-acp-ui.contentWidthRatio";
-const defaultRatio = 1;
-const minRatio = 0.1;
-const maxRatio = 1;
+const settingKey = "ib-acp-ui.contentWidthPercent";
+const defaultPercent = 100;
+const minPercent = 10;
+const maxPercent = 100;
 
-/** Clamps a content width ratio to the supported range. */
-export function clampContentWidthRatio(value: number): number {
+/** Clamps a content width percentage to the supported range. */
+export function clampContentWidthPercent(value: number): number {
     if (!Number.isFinite(value)) {
-        return defaultRatio;
+        return defaultPercent;
     }
-    return Math.min(maxRatio, Math.max(minRatio, value));
+    return Math.min(maxPercent, Math.max(minPercent, value));
 }
 
-/** Reads the chat content column width ratio from VS Code settings. */
+/** Reads the chat content column width ratio (0.1 to 1) from VS Code settings. */
 export function readContentWidthRatioFromSettings(): number {
     const raw = workspace
         .getConfiguration()
-        .get<number>(settingKey, defaultRatio);
-    return clampContentWidthRatio(raw);
+        .get<number>(settingKey, defaultPercent);
+    return clampContentWidthPercent(raw) / 100;
 }
 
-export { settingKey as contentWidthRatioSettingKey };
+export { settingKey as contentWidthPercentSettingKey };

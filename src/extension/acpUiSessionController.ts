@@ -9,7 +9,7 @@ import {
     workspace,
 } from "vscode";
 import {
-    contentWidthRatioSettingKey,
+    contentWidthPercentSettingKey,
     readContentWidthRatioFromSettings,
 } from "../acp/config/contentWidthRatioSetting";
 import {
@@ -130,7 +130,7 @@ export class AcpUiSessionController {
                 if (event.affectsConfiguration(toolCallVerbositySettingKey)) {
                     this.postToolCallVerbosity();
                 }
-                if (event.affectsConfiguration(contentWidthRatioSettingKey)) {
+                if (event.affectsConfiguration(contentWidthPercentSettingKey)) {
                     this.postContentWidthRatio();
                 }
                 if (

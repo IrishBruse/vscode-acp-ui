@@ -116,12 +116,14 @@
                     "default": "verbose",
                     "description": "How tool calls appear in the chat trace. Verbose shows full file previews and diffs. Compact uses single-line summaries."
                 },
-                "ib-acp-ui.contentWidthRatio": {
+                "ib-acp-ui.contentWidthPercent": {
                     "type": "number",
-                    "default": 1,
-                    "minimum": 0.1,
-                    "maximum": 1,
-                    "description": "Fraction of the chat panel width used by the transcript and composer. 1 is full width; 0.5 is half width with equal side margins."
+                    "default": 100,
+                    "minimum": 10,
+                    "maximum": 100,
+                    "order": 40,
+                    "title": "Chat content width (%)",
+                    "markdownDescription": "Percentage of the chat panel width used by the transcript and composer. `100` is full width; `50` is half width with equal side margins."
                 }
             }
         },
