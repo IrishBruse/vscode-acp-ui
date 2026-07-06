@@ -7,6 +7,8 @@ import { AgentThoughtBlock } from "./AgentThoughtBlock";
 import { PlanBlock } from "./PlanBlock";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolCallCompactBlock } from "./ToolCallCompactBlock";
+import { ToolCallCompactExecuteBlock } from "./ToolCallCompactExecuteBlock";
+import { isCompactGroupableTool } from "../toolCallCompactText";
 
 function traceSegmentGapClass(
     previousType: TraceItem["type"] | undefined,
@@ -24,7 +26,35 @@ function traceSegmentGapClass(
 
 type TraceRenderSegment =
     | { kind: "single"; item: TraceItem; index: number }
-    | { kind: "toolGroup"; tools: TraceToolItem[]; index: number };
+    | { kind: "toolGroup"; tools: TraceToolItem[]; index: number }
+    | { kind: "toolExecute"; tool: TraceToolItem; index: number };
+
+function flushToolBuffer(
+    segments: TraceRenderSegment[],
+    toolBuffer: TraceToolItem[],
+    groupStartIndex: number,
+    toolCallVerbosity: ToolCallVerbosity,
+): void {
+    if (toolBuffer.length === 0) {
+        return;
+    }
+    if (toolCallVerbosity === "compact") {
+        segments.push({
+            kind: "toolGroup",
+            tools: toolBuffer,
+            index: groupStartIndex,
+        });
+    } else {
+        for (let i = 0; i < toolBuffer.length; i++) {
+            const tool = toolBuffer[i]!;
+            segments.push({
+                kind: "single",
+                item: tool,
+                index: groupStartIndex + i,
+            });
+        }
+    }
+}
 
 function partitionTraceSegments(
     items: TraceItem[],
@@ -36,25 +66,7 @@ function partitionTraceSegments(
     let groupStartIndex = -1;
 
     const flushTools = (): void => {
-        if (toolBuffer.length === 0) {
-            return;
-        }
-        if (toolCallVerbosity === "compact") {
-            segments.push({
-                kind: "toolGroup",
-                tools: toolBuffer,
-                index: groupStartIndex,
-            });
-        } else {
-            for (let i = 0; i < toolBuffer.length; i++) {
-                const tool = toolBuffer[i]!;
-                segments.push({
-                    kind: "single",
-                    item: tool,
-                    index: groupStartIndex + i,
-                });
-            }
-        }
+        flushToolBuffer(segments, toolBuffer, groupStartIndex, toolCallVerbosity);
         toolBuffer = [];
         groupStartIndex = -1;
     };
@@ -65,6 +77,14 @@ function partitionTraceSegments(
             continue;
         }
         if (item.type === "tool") {
+            if (
+                toolCallVerbosity === "compact" &&
+                !isCompactGroupableTool(item)
+            ) {
+                flushTools();
+                segments.push({ kind: "toolExecute", tool: item, index });
+                continue;
+            }
             if (toolBuffer.length === 0) {
                 groupStartIndex = index;
             }
@@ -114,6 +134,23 @@ export function TraceList({
     return (
         <>
             {segments.map((segment) => {
+                if (segment.kind === "toolExecute") {
+                    const gapClass = traceSegmentGapClass(
+                        previousVisibleType,
+                        "tool",
+                    );
+                    previousVisibleType = "tool";
+                    return (
+                        <ToolCallCompactExecuteBlock
+                            key={segment.tool.toolCallId}
+                            className={gapClass.trim()}
+                            item={segment.tool}
+                            expandAllToolOutputs={expandAllToolOutputs}
+                            onCollapseExpandAll={onCollapseExpandAll}
+                        />
+                    );
+                }
+
                 if (segment.kind === "toolGroup") {
                     const gapClass = traceSegmentGapClass(
                         previousVisibleType,

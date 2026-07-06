@@ -4,9 +4,20 @@ import type { TraceToolItem } from "./chatReducer";
 export type ToolKindCounts = {
     read: number;
     search: number;
+    glob: number;
     edit: number;
     execute: number;
     other: number;
+};
+
+export type CompactToolDetailParts = {
+    verb: string;
+    detail: string;
+};
+
+export type CompactGroupSummaryParts = {
+    verbs: string;
+    counts: string;
 };
 
 export function basenameFromPath(pathText: string): string {
@@ -75,6 +86,27 @@ function grepPatternFromText(text: string): string | null {
     return null;
 }
 
+function isGlobTool(item: TraceToolItem): boolean {
+    const kind = normalizedKind(item);
+    if (kind === "glob") {
+        return true;
+    }
+    return item.title.toLowerCase().includes("glob");
+}
+
+function isSearchTool(item: TraceToolItem): boolean {
+    const kind = normalizedKind(item);
+    if (kind === "search") {
+        return true;
+    }
+    const title = item.title.toLowerCase();
+    return title.includes("grep") || title.includes("search");
+}
+
+function pluralCount(count: number, singular: string, plural: string): string {
+    return count === 1 ? `1 ${singular}` : `${count} ${plural}`;
+}
+
 function grepPathFromItem(item: TraceToolItem): string {
     const subtitle = item.subtitle?.trim() ?? "";
     const content = item.content?.trim() ?? "";
@@ -89,20 +121,52 @@ function grepPathFromItem(item: TraceToolItem): string {
     return "";
 }
 
+function globPatternFromItem(item: TraceToolItem): string | null {
+    const sources = [item.content ?? "", item.subtitle ?? "", item.title];
+    for (const source of sources) {
+        const pattern = grepPatternFromText(source);
+        if (pattern !== null) {
+            return pattern;
+        }
+    }
+    return null;
+}
+
+function globScopeFromItem(item: TraceToolItem): string {
+    const subtitle = item.subtitle?.trim() ?? "";
+    const content = item.content?.trim() ?? "";
+    const inMatch =
+        content.match(/\bin\s+(\S+)/i) ?? subtitle.match(/\bin\s+(\S+)/i);
+    if (inMatch?.[1] !== undefined && inMatch[1].length > 0) {
+        return inMatch[1];
+    }
+    if (subtitle.length > 0 && !subtitle.includes('"')) {
+        return subtitle;
+    }
+    return ".";
+}
+
 export function countToolKinds(items: TraceToolItem[]): ToolKindCounts {
     const counts: ToolKindCounts = {
         read: 0,
         search: 0,
+        glob: 0,
         edit: 0,
         execute: 0,
         other: 0,
     };
     for (const item of items) {
+        if (isGlobTool(item)) {
+            counts.glob++;
+            continue;
+        }
+        if (isSearchTool(item)) {
+            counts.search++;
+            continue;
+        }
         const kind = normalizedKind(item);
         if (kind === "read") {
             counts.read++;
-        } else if (kind === "search") {
-            counts.search++;
         } else if (kind === "edit") {
             counts.edit++;
         } else if (kind === "execute" || kind === "terminal") {
@@ -114,41 +178,62 @@ export function countToolKinds(items: TraceToolItem[]): ToolKindCounts {
     return counts;
 }
 
-/** One-line summary for a run of consecutive tool calls (for example "Read 3 files, 1 grep"). */
+/** Bold verb list plus dim counts for a grouped compact summary. */
+export function compactToolGroupSummaryParts(
+    items: TraceToolItem[],
+): CompactGroupSummaryParts | null {
+    if (items.length <= 1) {
+        return null;
+    }
+    const counts = countToolKinds(items);
+    const verbs: string[] = [];
+    const countParts: string[] = [];
+    if (counts.search > 0) {
+        verbs.push("Grepped");
+        countParts.push(pluralCount(counts.search, "grep", "greps"));
+    }
+    if (counts.glob > 0) {
+        verbs.push("Globbed");
+        countParts.push(pluralCount(counts.glob, "glob", "globs"));
+    }
+    if (counts.read > 0) {
+        verbs.push("read");
+        countParts.push(pluralCount(counts.read, "file", "files"));
+    }
+    if (counts.edit > 0) {
+        verbs.push("Edited");
+        countParts.push(pluralCount(counts.edit, "edit", "edits"));
+    }
+    if (counts.execute > 0) {
+        verbs.push("Ran");
+        countParts.push(pluralCount(counts.execute, "command", "commands"));
+    }
+    if (counts.other > 0) {
+        verbs.push("Used tools");
+        countParts.push(pluralCount(counts.other, "tool", "tools"));
+    }
+    if (verbs.length === 0) {
+        return null;
+    }
+    return { verbs: verbs.join(", "), counts: countParts.join(", ") };
+}
+
+/** One-line summary for a run of consecutive tool calls. */
 export function compactToolGroupSummary(items: TraceToolItem[]): string {
     if (items.length === 1) {
         return compactToolDetailLine(items[0]!);
     }
-    const counts = countToolKinds(items);
-    const parts: string[] = [];
-    if (counts.read > 0) {
-        parts.push(
-            counts.read === 1 ? "Read 1 file" : `Read ${counts.read} files`,
-        );
+    const parts = compactToolGroupSummaryParts(items);
+    if (parts === null) {
+        return "";
     }
-    if (counts.search > 0) {
-        parts.push(counts.search === 1 ? "1 grep" : `${counts.search} grep`);
-    }
-    if (counts.edit > 0) {
-        parts.push(counts.edit === 1 ? "1 edit" : `${counts.edit} edits`);
-    }
-    if (counts.execute > 0) {
-        parts.push(
-            counts.execute === 1
-                ? "1 command"
-                : `${counts.execute} commands`,
-        );
-    }
-    if (counts.other > 0) {
-        parts.push(
-            counts.other === 1 ? "1 tool" : `${counts.other} tools`,
-        );
-    }
-    return parts.join(", ");
+    return `${parts.verbs} ${parts.counts}`;
 }
 
-/** Dim detail line for one tool in compact mode. */
-export function compactToolDetailLine(item: TraceToolItem): string {
+/** Verb (dim) and detail (bright) for one compact tool line. */
+export function compactToolDetailParts(
+    item: TraceToolItem,
+): CompactToolDetailParts {
     const kind = normalizedKind(item);
     const subtitle = item.subtitle?.trim() ?? "";
 
@@ -157,16 +242,7 @@ export function compactToolDetailLine(item: TraceToolItem): string {
             subtitle.length > 0
                 ? subtitle
                 : (item.content?.split("\n")[0]?.trim() ?? item.title);
-        const base = basenameFromPath(path);
-        const { added, removed } = diffLineStats(item.diffRows);
-        let stats = "";
-        if (added > 0) {
-            stats += ` +${added}`;
-        }
-        if (removed > 0) {
-            stats += ` -${removed}`;
-        }
-        return `Edited ${base}${stats}`;
+        return { verb: "Edited", detail: basenameFromPath(path) };
     }
 
     if (kind === "read") {
@@ -175,43 +251,168 @@ export function compactToolDetailLine(item: TraceToolItem): string {
                 ? pathWithoutLineRange(subtitle)
                 : item.title.trim();
         const lineRange = readLineRangeSuffix(item);
-        return lineRange === null ? `Read ${path}` : `Read ${path} ${lineRange}`;
+        const detail =
+            lineRange === null ? path : `${path} ${lineRange}`;
+        return { verb: "Read", detail };
     }
 
-    if (kind === "search") {
+    if (isGlobTool(item)) {
+        const pattern = globPatternFromItem(item);
+        const scope = globScopeFromItem(item);
+        if (pattern !== null) {
+            return {
+                verb: "Globbed",
+                detail: `"${pattern}" in ${scope}`,
+            };
+        }
+        if (scope.length > 0) {
+            return { verb: "Globbed", detail: scope };
+        }
+        return { verb: "Globbed", detail: "" };
+    }
+
+    if (isSearchTool(item)) {
         const pattern =
             grepPatternFromText(item.content ?? "") ??
             grepPatternFromText(subtitle) ??
             grepPatternFromText(item.title);
         const path = grepPathFromItem(item);
         if (pattern !== null && path.length > 0) {
-            return `Grepped "${pattern}" in ${path}`;
+            return {
+                verb: "Grepped",
+                detail: `"${pattern}" in ${path}`,
+            };
         }
         if (pattern !== null) {
-            return `Grepped "${pattern}"`;
+            return { verb: "Grepped", detail: `"${pattern}"` };
         }
         if (path.length > 0) {
-            return `Grepped ${path}`;
+            return { verb: "Grepped", detail: path };
         }
-        const title = item.title.trim();
-        return title.length > 0 ? title : "Grep";
+        return { verb: "Grepped", detail: "" };
     }
 
     if (kind === "execute" || kind === "terminal") {
         const cmd = subtitle.length > 0 ? subtitle : item.title.trim();
         if (cmd.length === 0) {
-            return "Terminal";
+            return { verb: "Ran", detail: "" };
         }
-        return cmd.startsWith("$") ? cmd : `$ ${cmd}`;
+        return {
+            verb: "Ran",
+            detail: cmd.startsWith("$") ? cmd.slice(1).trimStart() : cmd,
+        };
     }
 
     const title = item.title.trim();
     if (subtitle.length > 0) {
-        return `${title} ${subtitle}`.trim();
+        return { verb: title.length > 0 ? title : "Tool", detail: subtitle };
     }
-    return title.length > 0 ? title : "Tool";
+    return { verb: title.length > 0 ? title : "Tool", detail: "" };
+}
+
+/** Full compact line text (verb + detail). */
+export function compactToolDetailLine(item: TraceToolItem): string {
+    const { verb, detail } = compactToolDetailParts(item);
+    const kind = normalizedKind(item);
+
+    if (kind === "edit") {
+        const { added, removed } = diffLineStats(item.diffRows);
+        let stats = "";
+        if (added > 0) {
+            stats += ` +${added}`;
+        }
+        if (removed > 0) {
+            stats += ` -${removed}`;
+        }
+        return detail.length > 0
+            ? `${verb} ${detail}${stats}`
+            : `${verb}${stats}`;
+    }
+
+    if (kind === "execute" || kind === "terminal") {
+        if (detail.length === 0) {
+            return "Terminal";
+        }
+        return detail.startsWith("$") ? detail : `$ ${detail}`;
+    }
+
+    return detail.length > 0 ? `${verb} ${detail}` : verb;
 }
 
 export function compactToolShowsDiffStats(item: TraceToolItem): boolean {
     return normalizedKind(item) === "edit";
+}
+
+export const compactExecutePreviewLineCount = 3;
+
+export function isExecuteTool(item: TraceToolItem): boolean {
+    const kind = normalizedKind(item);
+    return kind === "execute" || kind === "terminal";
+}
+
+/** Execute/terminal tools render on their own in compact mode (never grouped). */
+export function isCompactGroupableTool(item: TraceToolItem): boolean {
+    return !isExecuteTool(item);
+}
+
+export function executeCommandText(item: TraceToolItem): string {
+    const { detail } = compactToolDetailParts(item);
+    return detail;
+}
+
+/** Terminal output lines with a leading echoed command line stripped when present. */
+export function executeOutputContentLines(item: TraceToolItem): string[] {
+    const content = item.content?.trim();
+    if (content === undefined || content.length === 0) {
+        return [];
+    }
+    let normalized = content.replace(/\r\n/g, "\n");
+    if (normalized.endsWith("\n")) {
+        normalized = normalized.slice(0, -1);
+    }
+    if (normalized === "") {
+        return [];
+    }
+    const lines = normalized.split("\n");
+    const cmd = executeCommandText(item);
+    if (cmd.length === 0) {
+        return lines;
+    }
+    const first = lines[0]?.trim() ?? "";
+    if (first === `$ ${cmd}`.trim() || first === cmd.trim()) {
+        return lines.slice(1);
+    }
+    return lines;
+}
+
+export function executeOutputPreview(
+    item: TraceToolItem,
+    expanded: boolean,
+): {
+    previewLines: string[];
+    hiddenLineCount: number;
+    totalLineCount: number;
+} {
+    const lines = executeOutputContentLines(item);
+    const totalLineCount = lines.length;
+    if (expanded || totalLineCount === 0) {
+        return {
+            previewLines: lines,
+            hiddenLineCount: 0,
+            totalLineCount,
+        };
+    }
+    if (totalLineCount <= compactExecutePreviewLineCount) {
+        return {
+            previewLines: lines,
+            hiddenLineCount: 0,
+            totalLineCount,
+        };
+    }
+    const lastLine = lines[lines.length - 1] ?? "";
+    return {
+        previewLines: lastLine.length > 0 ? [lastLine] : [],
+        hiddenLineCount: totalLineCount - 1,
+        totalLineCount,
+    };
 }

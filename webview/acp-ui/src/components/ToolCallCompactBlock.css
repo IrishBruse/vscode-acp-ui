@@ -7,11 +7,21 @@
 }
 
 .tool-call-compact-summary {
-    color: var(--vscode-foreground);
     word-break: break-word;
 }
 
-.tool-call-compact[data-status="in_progress"] .tool-call-compact-summary {
+.tool-call-compact-summary-verbs {
+    color: var(--vscode-foreground);
+    font-weight: 600;
+}
+
+.tool-call-compact-summary-counts {
+    color: var(--vscode-descriptionForeground);
+    font-weight: 400;
+}
+
+.tool-call-compact[data-status="in_progress"] .tool-call-compact-summary-verbs,
+.tool-call-compact[data-status="in_progress"] .tool-call-compact-verb {
     color: color-mix(
         in srgb,
         var(--vscode-foreground) 88%,
@@ -25,10 +35,19 @@
     list-style: none;
 }
 
-.tool-call-compact-detail {
+.tool-call-compact-detail-row {
     margin: 0;
-    color: var(--vscode-descriptionForeground);
     word-break: break-word;
+}
+
+.tool-call-compact-verb {
+    color: var(--vscode-foreground);
+    font-weight: 400;
+}
+
+.tool-call-compact-detail-text {
+    color: var(--vscode-descriptionForeground);
+    font-weight: 400;
 }
 
 .tool-call-compact-stat--added {

@@ -1,0 +1,74 @@
+.tool-call-compact-execute {
+    margin: 0 0 8px;
+    font-family: var(--vscode-editor-font-family), ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    min-width: 0;
+}
+
+.tool-call-compact-execute-command {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 4px;
+    color: var(--vscode-foreground);
+    word-break: break-word;
+}
+
+.tool-call-compact-execute[data-status="in_progress"]
+    .tool-call-compact-execute-command {
+    color: color-mix(
+        in srgb,
+        var(--vscode-foreground) 88%,
+        var(--vscode-descriptionForeground)
+    );
+}
+
+.tool-call-compact-execute-prompt {
+    flex-shrink: 0;
+    color: var(
+        --vscode-descriptionForeground,
+        var(--vscode-list-deemphasizedForeground)
+    );
+    font-weight: 600;
+    user-select: none;
+}
+
+.tool-call-compact-execute-command-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tool-call-compact-execute-output {
+    margin: 2px 0 0;
+    padding: 0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--vscode-descriptionForeground);
+}
+
+.tool-call-compact-execute-hidden {
+    display: block;
+    width: 100%;
+    margin: 2px 0 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    text-align: left;
+    color: var(--vscode-descriptionForeground);
+    cursor: pointer;
+}
+
+.tool-call-compact-execute-hidden:hover {
+    color: var(--vscode-foreground);
+}
+
+.tool-call-compact-execute-running {
+    margin-top: 2px;
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}

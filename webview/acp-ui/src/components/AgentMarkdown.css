@@ -164,25 +164,50 @@
 }
 
 .agent-markdown table {
-    margin: 0.5em 0 0.75em;
+    margin: 0.65em 0 0.85em;
     border-collapse: collapse;
     width: 100%;
-    font-size: 0.95em;
+    font-family: var(--vscode-editor-font-family), ui-monospace, monospace;
+    font-size: var(--vscode-editor-font-size, 12px);
+    line-height: 1.45;
 }
 
 .agent-markdown th,
 .agent-markdown td {
-    border: 1px solid var(--vscode-widget-border);
-    padding: 4px 8px;
+    border: none;
+    padding: 1px 0;
     text-align: left;
+    vertical-align: top;
+    color: var(--vscode-foreground);
 }
 
-.agent-markdown th {
-    background-color: color-mix(
-        in srgb,
-        var(--vscode-editor-inactiveSelectionBackground) 50%,
-        transparent
-    );
+.agent-markdown thead th {
+    padding-bottom: 6px;
+    font-weight: 400;
+    background: none;
+}
+
+.agent-markdown th:first-child,
+.agent-markdown td:first-child {
+    padding-right: 28px;
+    white-space: nowrap;
+}
+
+.agent-markdown th:not(:first-child),
+.agent-markdown td:not(:first-child) {
+    width: 100%;
+}
+
+/* Tables read like settings key/value rows, not fenced inline-code chips. */
+.agent-markdown th code,
+.agent-markdown td code {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
 }
 
 .agent-markdown hr {
