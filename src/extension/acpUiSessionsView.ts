@@ -333,9 +333,15 @@ export class AcpUiSessionsViewProvider
         this.changeEvent.fire(undefined);
     }
 
-    async refreshFromAgent(): Promise<void> {
-        this.agentListProbeComplete = false;
-        this.refresh();
+    async refreshFromAgent(options?: { hard?: boolean }): Promise<void> {
+        const hard = options?.hard === true;
+        if (hard || !this.agentListProbeComplete) {
+            this.agentListProbeComplete = false;
+            if (hard) {
+                this.agentSessions = [];
+            }
+            this.refresh();
+        }
         await refreshAcpUiSessionsFromDisk();
         const agent = getActiveAgentConfig();
         if (agent === undefined) {
@@ -489,7 +495,7 @@ export class AcpUiSessionsViewProvider
         }
         await setActiveAgentName(picked.label);
         this.updateAgentMessage();
-        await this.refreshFromAgent();
+        await this.refreshFromAgent({ hard: true });
     }
 
     private async openSession(
