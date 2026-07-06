@@ -25,6 +25,9 @@ export type TodoEntry = {
 /** Tool call status forwarded from ACP. */
 export type ToolCallStatus = "pending" | "in_progress" | "completed" | "failed";
 
+/** How tool calls render in the chat trace. */
+export type ToolCallVerbosity = "verbose" | "compact";
+
 /** Line-level diff for tool output (git-style presentation in a webview). */
 export type ToolCallDiffRow = {
     kind: "removed" | "added" | "context";
@@ -128,6 +131,12 @@ export type ExtensionToWebviewMessage =
           hideComposerModelControls?: boolean;
           /** True while ACP `session/load` (or JSONL fallback) is pending at open. */
           sessionHistoryLoading?: boolean;
+          /** Tool call display mode (`verbose` shows full blocks; `compact` uses single-line summaries). */
+          toolCallVerbosity?: ToolCallVerbosity;
+      }
+    | {
+          type: "toolCallVerbosity";
+          verbosity: ToolCallVerbosity;
       }
     | {
           /** Markdown heading and inline-code colors derived from the active theme. */

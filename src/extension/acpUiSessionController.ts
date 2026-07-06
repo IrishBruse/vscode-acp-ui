@@ -9,6 +9,10 @@ import {
     workspace,
 } from "vscode";
 import {
+    readToolCallVerbosityFromSettings,
+    toolCallVerbositySettingKey,
+} from "../acp/config/toolCallVerbositySetting";
+import {
     type AcpAgentConfig,
     getAcpAgentConfigByName,
     getAcpAgentConfigsFromSettings,
@@ -119,6 +123,9 @@ export class AcpUiSessionController {
         );
         this.disposables.push(
             workspace.onDidChangeConfiguration((event) => {
+                if (event.affectsConfiguration(toolCallVerbositySettingKey)) {
+                    this.postToolCallVerbosity();
+                }
                 if (
                     event.affectsConfiguration("workbench.colorTheme") ||
                     event.affectsConfiguration(
@@ -249,7 +256,15 @@ export class AcpUiSessionController {
             ...(cachedSeed.modelSelection !== null
                 ? { sessionModels: cachedSeed.modelSelection }
                 : {}),
+            toolCallVerbosity: readToolCallVerbosityFromSettings(),
         };
+    }
+
+    private postToolCallVerbosity(): void {
+        this.postLive({
+            type: "toolCallVerbosity",
+            verbosity: readToolCallVerbosityFromSettings(),
+        });
     }
 
     private replayDocumentDelta(document: TextDocument): void {

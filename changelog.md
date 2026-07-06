@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added `ib-acp-ui.toolCallVerbosity` setting (`verbose` or `compact`) to switch tool calls between full blocks and single-line summaries.
 ## 0.3.0 - 2026-07-06
 
 - Added disk-backed `.acp` session files with JSONL event persistence, autosave, and a custom editor.

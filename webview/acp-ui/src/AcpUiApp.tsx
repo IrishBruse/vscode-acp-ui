@@ -15,7 +15,10 @@ import {
   useState,
 } from "react";
 import { cycleSessionModePick } from "../../../src/acp/session/sessionConfigOptions";
-import type { AcpUiSlashCommand } from "../../../src/protocol/extensionHostMessages";
+import type {
+  AcpUiSlashCommand,
+  ToolCallVerbosity,
+} from "../../../src/protocol/extensionHostMessages";
 import {
   type ChatAction,
   chatReducer,
@@ -127,6 +130,9 @@ export function AcpUiApp({
   } | null>(null);
   const [expandAllToolOutputs, setExpandAllToolOutputs] = useState(false);
   const [showThinkingBlocks, setShowThinkingBlocks] = useState(true);
+  const [toolCallVerbosity, setToolCallVerbosity] = useState<ToolCallVerbosity>(
+    init.toolCallVerbosity ?? "verbose",
+  );
   const traceRef = useRef<HTMLElement | null>(null);
   const traceContentRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
@@ -155,6 +161,10 @@ export function AcpUiApp({
   extensionDispatchRef.current = (message: ExtensionMessageAfterInit) => {
     if (message.type === "vscodeThemeVariables") {
       updateAgentMarkdownThemeColors(message.variables);
+      return;
+    }
+    if (message.type === "toolCallVerbosity") {
+      setToolCallVerbosity(message.verbosity);
       return;
     }
     dispatch(message as ChatAction);
@@ -580,6 +590,7 @@ export function AcpUiApp({
         onDragOver={onShellDragOver}
         onDrop={onShellDrop}
       >
+        <div className="acp-ui-content-column">
         <main
           ref={traceRef}
           className="agent-trace"
@@ -595,6 +606,7 @@ export function AcpUiApp({
               items={state.trace}
               showThoughts={showThinkingBlocks}
               expandAllToolOutputs={expandAllToolOutputs}
+              toolCallVerbosity={toolCallVerbosity}
               onCollapseExpandAll={() => {
                 setExpandAllToolOutputs(false);
               }}
@@ -703,6 +715,7 @@ export function AcpUiApp({
             onKeyDown={onComposerKeyDown}
             composerInputRef={composerTextareaRef}
           />
+        </div>
         </div>
       </div>
     </Fragment>

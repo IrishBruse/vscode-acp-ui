@@ -1,10 +1,12 @@
 import type { ReactElement } from "react";
 import "./TraceList.css";
-import type { TraceItem } from "../chatReducer";
+import type { ToolCallVerbosity } from "../../../src/protocol/extensionHostMessages";
+import type { TraceItem, TraceToolItem } from "../chatReducer";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { AgentThoughtBlock } from "./AgentThoughtBlock";
 import { PlanBlock } from "./PlanBlock";
 import { ToolCallBlock } from "./ToolCallBlock";
+import { ToolCallCompactBlock } from "./ToolCallCompactBlock";
 
 function traceSegmentGapClass(
     previousType: TraceItem["type"] | undefined,
@@ -20,6 +22,72 @@ function traceSegmentGapClass(
     return " trace-segment-gap";
 }
 
+type TraceRenderSegment =
+    | { kind: "single"; item: TraceItem; index: number }
+    | { kind: "toolGroup"; tools: TraceToolItem[]; index: number };
+
+function partitionTraceSegments(
+    items: TraceItem[],
+    showThoughts: boolean,
+    toolCallVerbosity: ToolCallVerbosity,
+): TraceRenderSegment[] {
+    const segments: TraceRenderSegment[] = [];
+    let toolBuffer: TraceToolItem[] = [];
+    let groupStartIndex = -1;
+
+    const flushTools = (): void => {
+        if (toolBuffer.length === 0) {
+            return;
+        }
+        if (toolCallVerbosity === "compact") {
+            segments.push({
+                kind: "toolGroup",
+                tools: toolBuffer,
+                index: groupStartIndex,
+            });
+        } else {
+            for (let i = 0; i < toolBuffer.length; i++) {
+                const tool = toolBuffer[i]!;
+                segments.push({
+                    kind: "single",
+                    item: tool,
+                    index: groupStartIndex + i,
+                });
+            }
+        }
+        toolBuffer = [];
+        groupStartIndex = -1;
+    };
+
+    for (let index = 0; index < items.length; index++) {
+        const item = items[index]!;
+        if (item.type === "thought" && !showThoughts) {
+            continue;
+        }
+        if (item.type === "tool") {
+            if (toolBuffer.length === 0) {
+                groupStartIndex = index;
+            }
+            toolBuffer.push(item);
+            continue;
+        }
+        flushTools();
+        segments.push({ kind: "single", item, index });
+    }
+    flushTools();
+    return segments;
+}
+
+function visibleTraceType(
+    item: TraceItem,
+    showThoughts: boolean,
+): TraceItem["type"] | undefined {
+    if (item.type === "thought" && !showThoughts) {
+        return undefined;
+    }
+    return item.type;
+}
+
 /**
  * Renders the conversation trace: user lines, streamed agent markdown, tool blocks, and plan blocks.
  */
@@ -27,31 +95,57 @@ export function TraceList({
     items,
     showThoughts,
     expandAllToolOutputs,
+    toolCallVerbosity,
     onCollapseExpandAll,
 }: {
     items: TraceItem[];
     showThoughts: boolean;
     expandAllToolOutputs: boolean;
+    toolCallVerbosity: ToolCallVerbosity;
     onCollapseExpandAll?: () => void;
 }): ReactElement {
+    const segments = partitionTraceSegments(
+        items,
+        showThoughts,
+        toolCallVerbosity,
+    );
     let previousVisibleType: TraceItem["type"] | undefined;
 
     return (
         <>
-            {items.map((item, index) => {
-                if (item.type === "thought" && !showThoughts) {
+            {segments.map((segment) => {
+                if (segment.kind === "toolGroup") {
+                    const gapClass = traceSegmentGapClass(
+                        previousVisibleType,
+                        "tool",
+                    );
+                    previousVisibleType = "tool";
+                    return (
+                        <ToolCallCompactBlock
+                            key={segment.tools
+                                .map((tool) => tool.toolCallId)
+                                .join(":")}
+                            className={gapClass.trim()}
+                            items={segment.tools}
+                        />
+                    );
+                }
+
+                const item = segment.item;
+                const currentType = visibleTraceType(item, showThoughts);
+                if (currentType === undefined) {
                     return null;
                 }
                 const gapClass = traceSegmentGapClass(
                     previousVisibleType,
-                    item.type,
+                    currentType,
                 );
-                previousVisibleType = item.type;
+                previousVisibleType = currentType;
 
                 if (item.type === "user") {
                     return (
                         <section
-                            key={index}
+                            key={segment.index}
                             className={`user-prompt-bar${gapClass}`}
                             aria-label="User message"
                         >
@@ -62,7 +156,7 @@ export function TraceList({
                 if (item.type === "agent") {
                     return (
                         <div
-                            key={index}
+                            key={segment.index}
                             className={`agent-response-stream${gapClass}`}
                         >
                             <div
@@ -77,7 +171,7 @@ export function TraceList({
                 if (item.type === "thought") {
                     return (
                         <AgentThoughtBlock
-                            key={index}
+                            key={segment.index}
                             className={gapClass.trim()}
                             text={item.text}
                             durationMs={item.durationMs}
@@ -97,7 +191,7 @@ export function TraceList({
                 }
                 return (
                     <PlanBlock
-                        key={index}
+                        key={segment.index}
                         className={gapClass.trim()}
                         entries={item.entries}
                     />

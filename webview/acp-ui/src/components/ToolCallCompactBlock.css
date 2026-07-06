@@ -1,0 +1,40 @@
+.tool-call-compact {
+    margin: 0 0 8px;
+    font-family: var(--vscode-editor-font-family), ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    min-width: 0;
+}
+
+.tool-call-compact-summary {
+    color: var(--vscode-foreground);
+    word-break: break-word;
+}
+
+.tool-call-compact[data-status="in_progress"] .tool-call-compact-summary {
+    color: color-mix(
+        in srgb,
+        var(--vscode-foreground) 88%,
+        var(--vscode-descriptionForeground)
+    );
+}
+
+.tool-call-compact-details {
+    margin: 2px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tool-call-compact-detail {
+    margin: 0;
+    color: var(--vscode-descriptionForeground);
+    word-break: break-word;
+}
+
+.tool-call-compact-stat--added {
+    color: var(--vscode-terminal-ansiGreen, #4ec9b0);
+}
+
+.tool-call-compact-stat--removed {
+    color: var(--vscode-terminal-ansiRed, #f14c4c);
+}

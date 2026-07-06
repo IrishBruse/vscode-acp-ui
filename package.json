@@ -106,6 +106,15 @@
                     "type": "string",
                     "default": "",
                     "description": "Directory for chat .acp files. Empty uses extension global storage. Absolute path or workspace-relative."
+                },
+                "ib-acp-ui.toolCallVerbosity": {
+                    "type": "string",
+                    "enum": [
+                        "verbose",
+                        "compact"
+                    ],
+                    "default": "verbose",
+                    "description": "How tool calls appear in the chat trace. Verbose shows full file previews and diffs. Compact uses single-line summaries."
                 }
             }
         },
