@@ -7,7 +7,7 @@
 }
 
 .acp-ui-content-column {
-    width: min(720px, 100%);
+    width: calc(var(--acp-ui-content-width-ratio, 1) * 100%);
     margin-inline: auto;
 }
 

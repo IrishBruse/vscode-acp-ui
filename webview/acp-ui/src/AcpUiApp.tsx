@@ -133,6 +133,9 @@ export function AcpUiApp({
   const [toolCallVerbosity, setToolCallVerbosity] = useState<ToolCallVerbosity>(
     init.toolCallVerbosity ?? "verbose",
   );
+  const [contentWidthRatio, setContentWidthRatio] = useState(
+    init.contentWidthRatio ?? 1,
+  );
   const traceRef = useRef<HTMLElement | null>(null);
   const traceContentRef = useRef<HTMLDivElement | null>(null);
   const stickToBottomRef = useRef(true);
@@ -165,6 +168,10 @@ export function AcpUiApp({
     }
     if (message.type === "toolCallVerbosity") {
       setToolCallVerbosity(message.verbosity);
+      return;
+    }
+    if (message.type === "contentWidthRatio") {
+      setContentWidthRatio(message.ratio);
       return;
     }
     dispatch(message as ChatAction);
@@ -584,6 +591,11 @@ export function AcpUiApp({
           fileDragActive
             ? "acp-ui-shell acp-ui-shell--file-drag"
             : "acp-ui-shell"
+        }
+        style={
+          {
+            "--acp-ui-content-width-ratio": contentWidthRatio,
+          } as React.CSSProperties
         }
         onDragEnterCapture={onShellDragEnterCapture}
         onDragLeave={onShellDragLeave}

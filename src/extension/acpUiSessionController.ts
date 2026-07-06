@@ -9,6 +9,10 @@ import {
     workspace,
 } from "vscode";
 import {
+    contentWidthRatioSettingKey,
+    readContentWidthRatioFromSettings,
+} from "../acp/config/contentWidthRatioSetting";
+import {
     readToolCallVerbosityFromSettings,
     toolCallVerbositySettingKey,
 } from "../acp/config/toolCallVerbositySetting";
@@ -125,6 +129,9 @@ export class AcpUiSessionController {
             workspace.onDidChangeConfiguration((event) => {
                 if (event.affectsConfiguration(toolCallVerbositySettingKey)) {
                     this.postToolCallVerbosity();
+                }
+                if (event.affectsConfiguration(contentWidthRatioSettingKey)) {
+                    this.postContentWidthRatio();
                 }
                 if (
                     event.affectsConfiguration("workbench.colorTheme") ||
@@ -257,6 +264,7 @@ export class AcpUiSessionController {
                 ? { sessionModels: cachedSeed.modelSelection }
                 : {}),
             toolCallVerbosity: readToolCallVerbosityFromSettings(),
+            contentWidthRatio: readContentWidthRatioFromSettings(),
         };
     }
 
@@ -264,6 +272,13 @@ export class AcpUiSessionController {
         this.postLive({
             type: "toolCallVerbosity",
             verbosity: readToolCallVerbosityFromSettings(),
+        });
+    }
+
+    private postContentWidthRatio(): void {
+        this.postLive({
+            type: "contentWidthRatio",
+            ratio: readContentWidthRatioFromSettings(),
         });
     }
 

@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Added `ib-acp-ui.toolCallVerbosity` setting (`verbose` or `compact`) to switch tool calls between full blocks and single-line summaries.
+- Added `ib-acp-ui.contentWidthRatio` setting (0.1 to 1) to control how much horizontal space the transcript and composer use.
+  `1` is full width, `0.5` is half width with equal side margins.
 - Pin the conversation scrollbar to the far right of the chat panel while keeping transcript and composer content centered.
 
 ## 0.3.0 - 2026-07-06

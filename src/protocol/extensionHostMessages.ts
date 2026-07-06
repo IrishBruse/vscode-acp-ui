@@ -133,10 +133,16 @@ export type ExtensionToWebviewMessage =
           sessionHistoryLoading?: boolean;
           /** Tool call display mode (`verbose` shows full blocks; `compact` uses single-line summaries). */
           toolCallVerbosity?: ToolCallVerbosity;
+          /** Fraction of panel width for transcript and composer (1 = full width). */
+          contentWidthRatio?: number;
       }
     | {
           type: "toolCallVerbosity";
           verbosity: ToolCallVerbosity;
+      }
+    | {
+          type: "contentWidthRatio";
+          ratio: number;
       }
     | {
           /** Markdown heading and inline-code colors derived from the active theme. */
