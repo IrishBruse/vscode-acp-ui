@@ -27,8 +27,8 @@ import {
     readCachedComposerSeed,
     sessionConfigOptionsInReplayEvents,
 } from "../acp/session/sessionConfigOptionsCache";
-import { formatPathWithTilde } from "../platform/pathDisplay";
 import { openWorkspacePathTarget } from "../platform/openWorkspacePathTarget";
+import { formatPathWithTilde } from "../platform/pathDisplay";
 import { resolveUserHomeDir } from "../platform/resolveUserHomeDir";
 import { resolveWorkspacePath } from "../platform/resolveWorkspacePath";
 import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";

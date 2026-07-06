@@ -1,5 +1,5 @@
 import { basename } from "node:path";
-import { commands, FileType, type Uri, workspace } from "vscode";
+import { commands, type FileStat, FileType, type Uri, workspace } from "vscode";
 import { normalizePathForCompare } from "./resolveWorkspacePath";
 
 export type WorkspacePathOpenTarget = "file" | "auto";
@@ -12,7 +12,7 @@ export async function openWorkspacePathTarget(
     const openMode = target ?? "file";
 
     if (openMode === "auto") {
-        let stat;
+        let stat: FileStat;
         try {
             stat = await workspace.fs.stat(uri);
         } catch {

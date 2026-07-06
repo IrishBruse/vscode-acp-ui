@@ -425,9 +425,7 @@ export function tryParseWebviewMessage(
         return {
             type: "openWorkspacePath",
             path: record.path.trim(),
-            ...(target !== undefined && target !== "file"
-                ? { target }
-                : {}),
+            ...(target !== undefined && target !== "file" ? { target } : {}),
         };
     }
     return null;

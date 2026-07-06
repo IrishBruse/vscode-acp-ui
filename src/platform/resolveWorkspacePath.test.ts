@@ -1,7 +1,11 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveUserHomeDir } from "./resolveUserHomeDir";
-import { expandTildeInPath, normalizePathForCompare, resolveWorkspacePath } from "./resolveWorkspacePath";
+import {
+    expandTildeInPath,
+    normalizePathForCompare,
+    resolveWorkspacePath,
+} from "./resolveWorkspacePath";
 
 describe("expandTildeInPath", () => {
     it("expands ~/ paths with the user home directory", () => {
