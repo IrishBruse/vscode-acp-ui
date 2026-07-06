@@ -4,6 +4,7 @@ import type {
 } from "../../src/protocol/extensionHostMessages";
 import "../../webview/acp-ui/src/global.css";
 import type { InitPayload } from "../../webview/acp-ui/src/chatReducer";
+import { setCompactToolPathHome } from "../../webview/acp-ui/src/toolCallCompactText";
 import { type ChatView, mountChatView } from "../../webview/acp-ui/src/ui";
 import { applyStandaloneVsCodeTheme } from "./standaloneTheme";
 
@@ -164,6 +165,9 @@ async function bootstrap(): Promise<void> {
 
     host.onExtensionMessage((message: ExtensionToWebviewMessage) => {
         if (message.type === "init") {
+            if (message.homeDir !== undefined && message.homeDir.length > 0) {
+                setCompactToolPathHome(message.homeDir);
+            }
             const workspaceLabel = message.workspaceLabel;
             const restored = loadStandalonePromptHistory(workspaceLabel);
             const initPayload: InitPayload =

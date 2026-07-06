@@ -32,6 +32,7 @@ import { FileAcpRpcNdjsonSink } from "../src/platform/node/fileRpcNdjsonSink";
 import { createNodeAcpSessionHostRuntime } from "../src/platform/node/nodeAcpSessionHostRuntime";
 import { resolveStandaloneThemeCssVariables } from "../src/platform/node/resolveStandaloneThemeCssVariables";
 import { formatPathWithTilde } from "../src/platform/pathDisplay";
+import { resolveUserHomeDir } from "../src/platform/resolveUserHomeDir";
 import {
     type ExtensionToWebviewMessage,
     tryParseWebviewMessage,
@@ -640,7 +641,11 @@ wss.on("connection", (ws: WebSocket) => {
                 type: "init",
                 sessionId,
                 title: demoSession ? "ACP UI (demo)" : "ACP UI (standalone)",
-                workspaceLabel: formatPathWithTilde(process.cwd()),
+                workspaceLabel: formatPathWithTilde(
+                    process.cwd(),
+                    resolveUserHomeDir(),
+                ),
+                homeDir: resolveUserHomeDir(),
                 agentVersionLabel: undefined,
                 acpAgentName: selectedAgentName,
                 availableAcpAgents: agentConfigs.map((c) => c.name),

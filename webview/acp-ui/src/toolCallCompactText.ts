@@ -1,5 +1,53 @@
 import type { ToolCallDiffRow } from "../../../src/protocol/extensionHostMessages";
+import { formatPathWithTilde } from "../../../src/platform/pathDisplay";
 import type { TraceToolItem } from "./chatReducer";
+
+let compactToolPathHome = "";
+
+/** Called on webview init so absolute paths shorten to `~/...`. */
+export function setCompactToolPathHome(home: string): void {
+    compactToolPathHome = home.trim();
+}
+
+function formatCompactPath(path: string): string {
+    const trimmed = path.trim();
+    if (trimmed.length === 0 || compactToolPathHome.length === 0) {
+        return trimmed;
+    }
+    return formatPathWithTilde(trimmed, compactToolPathHome);
+}
+
+function shortPathDisplay(rawPath: string): {
+    short: string;
+    full: string;
+    hasDirectory: boolean;
+} {
+    const full = formatCompactPath(rawPath);
+    const short = basenameFromPath(full);
+    return { short, full, hasDirectory: full !== short };
+}
+
+function pathSegmentFromRaw(
+    rawPath: string,
+    options?: { prefix?: string; suffix?: string },
+): Pick<CompactToolDetailParts, "detail" | "pathSegment"> {
+    const { short, full, hasDirectory } = shortPathDisplay(rawPath);
+    const prefix = options?.prefix ?? "";
+    const suffix = options?.suffix ?? "";
+    const detail = `${prefix}${short}${suffix}`;
+    if (!hasDirectory) {
+        return { detail };
+    }
+    return {
+        detail,
+        pathSegment: {
+            ...(prefix.length > 0 ? { prefix } : {}),
+            label: short,
+            title: full,
+            ...(suffix.length > 0 ? { suffix } : {}),
+        },
+    };
+}
 
 export type ToolKindCounts = {
     read: number;
@@ -12,7 +60,15 @@ export type ToolKindCounts = {
 
 export type CompactToolDetailParts = {
     verb: string;
+    /** Visible detail text (uses short path labels). */
     detail: string;
+    /** When set, the path portion is rendered with a hover title for the full path. */
+    pathSegment?: {
+        prefix?: string;
+        label: string;
+        title: string;
+        suffix?: string;
+    };
 };
 
 export type CompactGroupSummaryParts = {
@@ -113,10 +169,10 @@ function grepPathFromItem(item: TraceToolItem): string {
     const inMatch =
         content.match(/\bin\s+(\S+)/i) ?? subtitle.match(/\bin\s+(\S+)/i);
     if (inMatch?.[1] !== undefined && inMatch[1].length > 0) {
-        return inMatch[1];
+        return formatCompactPath(inMatch[1]);
     }
     if (subtitle.length > 0) {
-        return pathWithoutLineRange(subtitle);
+        return formatCompactPath(pathWithoutLineRange(subtitle));
     }
     return "";
 }
@@ -138,10 +194,10 @@ function globScopeFromItem(item: TraceToolItem): string {
     const inMatch =
         content.match(/\bin\s+(\S+)/i) ?? subtitle.match(/\bin\s+(\S+)/i);
     if (inMatch?.[1] !== undefined && inMatch[1].length > 0) {
-        return inMatch[1];
+        return formatCompactPath(inMatch[1]);
     }
     if (subtitle.length > 0 && !subtitle.includes('"')) {
-        return subtitle;
+        return formatCompactPath(subtitle);
     }
     return ".";
 }
@@ -242,18 +298,21 @@ export function compactToolDetailParts(
             subtitle.length > 0
                 ? subtitle
                 : (item.content?.split("\n")[0]?.trim() ?? item.title);
-        return { verb: "Edited", detail: basenameFromPath(path) };
+        return { verb: "Edited", ...pathSegmentFromRaw(path) };
     }
 
     if (kind === "read") {
-        const path =
+        const rawPath =
             subtitle.length > 0
                 ? pathWithoutLineRange(subtitle)
                 : item.title.trim();
         const lineRange = readLineRangeSuffix(item);
-        const detail =
-            lineRange === null ? path : `${path} ${lineRange}`;
-        return { verb: "Read", detail };
+        const suffix =
+            lineRange !== null && lineRange.length > 0 ? ` ${lineRange}` : "";
+        return {
+            verb: "Read",
+            ...pathSegmentFromRaw(rawPath, { suffix }),
+        };
     }
 
     if (isGlobTool(item)) {
@@ -262,11 +321,11 @@ export function compactToolDetailParts(
         if (pattern !== null) {
             return {
                 verb: "Globbed",
-                detail: `"${pattern}" in ${scope}`,
+                ...pathSegmentFromRaw(scope, { prefix: `"${pattern}" in ` }),
             };
         }
         if (scope.length > 0) {
-            return { verb: "Globbed", detail: scope };
+            return { verb: "Globbed", ...pathSegmentFromRaw(scope) };
         }
         return { verb: "Globbed", detail: "" };
     }
@@ -280,14 +339,14 @@ export function compactToolDetailParts(
         if (pattern !== null && path.length > 0) {
             return {
                 verb: "Grepped",
-                detail: `"${pattern}" in ${path}`,
+                ...pathSegmentFromRaw(path, { prefix: `"${pattern}" in ` }),
             };
         }
         if (pattern !== null) {
             return { verb: "Grepped", detail: `"${pattern}"` };
         }
         if (path.length > 0) {
-            return { verb: "Grepped", detail: path };
+            return { verb: "Grepped", ...pathSegmentFromRaw(path) };
         }
         return { verb: "Grepped", detail: "" };
     }
@@ -305,7 +364,10 @@ export function compactToolDetailParts(
 
     const title = item.title.trim();
     if (subtitle.length > 0) {
-        return { verb: title.length > 0 ? title : "Tool", detail: subtitle };
+        return {
+            verb: title.length > 0 ? title : "Tool",
+            ...pathSegmentFromRaw(subtitle),
+        };
     }
     return { verb: title.length > 0 ? title : "Tool", detail: "" };
 }

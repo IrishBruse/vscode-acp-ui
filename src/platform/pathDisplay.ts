@@ -1,12 +1,7 @@
-import { homedir } from "node:os";
-
 /**
  * Replaces the user home directory prefix with `~` for compact UI labels.
  */
-export function formatPathWithTilde(
-    path: string,
-    home: string = homedir(),
-): string {
+export function formatPathWithTilde(path: string, home: string): string {
     if (path.length === 0 || home.length === 0) {
         return path;
     }

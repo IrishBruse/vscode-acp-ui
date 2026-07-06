@@ -6,6 +6,7 @@ import "./global.css";
 import "./boot.css";
 import { replayChatState, createChatStateFromInit, type ChatState } from "./chatReducer";
 import { createVsCodeAcpUiHost } from "./host";
+import { setCompactToolPathHome } from "./toolCallCompactText";
 import { type ChatView, type InitPayload, mountChatView } from "./ui";
 
 function isInitPayload(
@@ -51,6 +52,9 @@ function tryMountView(): void {
     }
     initReceived = true;
     clearTimeout(initRetryTimer);
+    if (pendingInit.homeDir !== undefined && pendingInit.homeDir.length > 0) {
+        setCompactToolPathHome(pendingInit.homeDir);
+    }
     const initialChatState =
         pendingHistory !== undefined && pendingHistory.length > 0
             ? applyPendingSessionHistoryLoading(

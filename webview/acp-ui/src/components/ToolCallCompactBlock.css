@@ -50,6 +50,17 @@
     font-weight: 400;
 }
 
+.tool-call-compact-path {
+    cursor: default;
+}
+
+.tool-call-compact-path:hover {
+    color: var(--vscode-foreground);
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+}
+
 .tool-call-compact-stat--added {
     color: var(--vscode-terminal-ansiGreen, #4ec9b0);
 }

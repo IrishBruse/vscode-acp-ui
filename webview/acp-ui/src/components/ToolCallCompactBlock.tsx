@@ -2,28 +2,43 @@ import type { ReactElement } from "react";
 import "./ToolCallCompactBlock.css";
 import type { TraceToolItem } from "../chatReducer";
 import {
+    type CompactToolDetailParts,
     compactToolDetailParts,
     compactToolGroupSummaryParts,
     compactToolShowsDiffStats,
     diffLineStats,
 } from "../toolCallCompactText";
 
+function CompactDetailText({ parts }: { parts: CompactToolDetailParts }): ReactElement {
+    const segment = parts.pathSegment;
+    if (segment === undefined) {
+        return (
+            <span className="tool-call-compact-detail-text">{parts.detail}</span>
+        );
+    }
+    return (
+        <span className="tool-call-compact-detail-text">
+            {segment.prefix ?? null}
+            <span className="tool-call-compact-path" title={segment.title}>
+                {segment.label}
+            </span>
+            {segment.suffix ?? null}
+        </span>
+    );
+}
+
 function CompactVerbDetail({
-    verb,
-    detail,
+    parts,
 }: {
-    verb: string;
-    detail: string;
+    parts: CompactToolDetailParts;
 }): ReactElement {
     return (
         <>
-            <span className="tool-call-compact-verb">{verb}</span>
-            {detail.length > 0 ? (
+            <span className="tool-call-compact-verb">{parts.verb}</span>
+            {parts.detail.length > 0 ? (
                 <>
                     {" "}
-                    <span className="tool-call-compact-detail-text">
-                        {detail}
-                    </span>
+                    <CompactDetailText parts={parts} />
                 </>
             ) : null}
         </>
@@ -31,17 +46,15 @@ function CompactVerbDetail({
 }
 
 function CompactEditLine({ item }: { item: TraceToolItem }): ReactElement {
-    const { verb, detail } = compactToolDetailParts(item);
+    const parts = compactToolDetailParts(item);
     const { added, removed } = diffLineStats(item.diffRows);
     return (
         <span className="tool-call-compact-edit">
-            <span className="tool-call-compact-verb">{verb}</span>
-            {detail.length > 0 ? (
+            <span className="tool-call-compact-verb">{parts.verb}</span>
+            {parts.detail.length > 0 ? (
                 <>
                     {" "}
-                    <span className="tool-call-compact-detail-text">
-                        {detail}
-                    </span>
+                    <CompactDetailText parts={parts} />
                 </>
             ) : null}
             {added > 0 ? (
@@ -64,8 +77,7 @@ function CompactDetailLine({ item }: { item: TraceToolItem }): ReactElement {
     if (compactToolShowsDiffStats(item)) {
         return <CompactEditLine item={item} />;
     }
-    const parts = compactToolDetailParts(item);
-    return <CompactVerbDetail {...parts} />;
+    return <CompactVerbDetail parts={compactToolDetailParts(item)} />;
 }
 
 function CompactGroupSummary({

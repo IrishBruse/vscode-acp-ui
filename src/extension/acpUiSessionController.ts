@@ -28,6 +28,7 @@ import {
     sessionConfigOptionsInReplayEvents,
 } from "../acp/session/sessionConfigOptionsCache";
 import { formatPathWithTilde } from "../platform/pathDisplay";
+import { resolveUserHomeDir } from "../platform/resolveUserHomeDir";
 import { createDefaultAcpSessionHostRuntime } from "../platform/vscode/defaultHostRuntime";
 import { resolveMarkdownThemeVariables } from "../platform/vscode/resolveMarkdownThemeVariables";
 import type {
@@ -225,7 +226,7 @@ export class AcpUiSessionController {
         const folder = workspace.workspaceFolders?.[0];
         const workspaceLabel =
             folder !== undefined
-                ? formatPathWithTilde(folder.uri.fsPath)
+                ? formatPathWithTilde(folder.uri.fsPath, resolveUserHomeDir())
                 : undefined;
         const configs = getAcpAgentConfigsFromSettings();
         const availableNames = configs.map((c) => c.name);
@@ -246,6 +247,7 @@ export class AcpUiSessionController {
                 ? { vscodeThemeVariables }
                 : {}),
             workspaceLabel,
+            homeDir: resolveUserHomeDir(),
             agentVersionLabel,
             acpAgentName: defaultAgent?.name,
             lockSessionAgent: true,

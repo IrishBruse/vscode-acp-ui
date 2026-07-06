@@ -110,6 +110,8 @@ export type ExtensionToWebviewMessage =
           sessionId: string;
           title: string;
           workspaceLabel?: string;
+          /** Absolute user home directory for compact path labels (`~` substitution). */
+          homeDir?: string;
           /** Relative workspace file paths used by `@` autocomplete in the composer. */
           workspaceFiles?: string[];
           agentVersionLabel?: string;

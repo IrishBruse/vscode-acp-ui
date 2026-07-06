@@ -8,6 +8,7 @@ import {
     diffLineStats,
     executeOutputPreview,
     isCompactGroupableTool,
+    setCompactToolPathHome,
 } from "./toolCallCompactText";
 
 function toolItem(
@@ -27,6 +28,34 @@ function toolItem(
 }
 
 describe("toolCallCompactText", () => {
+    it("shortens absolute paths under home in compact labels", () => {
+        setCompactToolPathHome("/home/econn");
+        const item = toolItem({
+            toolCallId: "read-abs",
+            kind: "read",
+            subtitle: "/home/econn/git/vscode-acp-ui/AGENTS.md",
+        });
+        expect(compactToolDetailLine(item)).toBe("Read AGENTS.md");
+        expect(compactToolDetailParts(item)).toMatchObject({
+            verb: "Read",
+            detail: "AGENTS.md",
+            pathSegment: {
+                label: "AGENTS.md",
+                title: "~/git/vscode-acp-ui/AGENTS.md",
+            },
+        });
+        const grep = toolItem({
+            toolCallId: "grep-abs",
+            kind: "search",
+            title: "Grep",
+            subtitle: "/home/econn/git/vscode-acp-ui",
+        });
+        expect(compactToolDetailLine(grep)).toBe("Grepped vscode-acp-ui");
+        expect(compactToolDetailParts(grep).pathSegment?.title).toBe(
+            "~/git/vscode-acp-ui",
+        );
+    });
+
     it("formats a single edit with diff stats", () => {
         const item = toolItem({
             toolCallId: "edit-1",
@@ -55,7 +84,7 @@ describe("toolCallCompactText", () => {
             content: "lines 218-267\nbody",
         });
         expect(compactToolDetailLine(item)).toBe(
-            "Read webview/acp-ui/src/chatReducer.test.ts lines 218-267",
+            "Read chatReducer.test.ts lines 218-267",
         );
     });
 
@@ -68,7 +97,7 @@ describe("toolCallCompactText", () => {
             content: 'Grepped "createChatStateFromInit" in webview/acp-ui/src/chatReducer.test.ts',
         });
         expect(compactToolDetailLine(item)).toBe(
-            'Grepped "createChatStateFromInit" in webview/acp-ui/src/chatReducer.test.ts',
+            'Grepped "createChatStateFromInit" in chatReducer.test.ts',
         );
     });
 
@@ -115,7 +144,11 @@ describe("toolCallCompactText", () => {
         });
         expect(compactToolDetailParts(item)).toEqual({
             verb: "Read",
-            detail: "webview/acp-ui/src/components/TraceList.css",
+            detail: "TraceList.css",
+            pathSegment: {
+                label: "TraceList.css",
+                title: "webview/acp-ui/src/components/TraceList.css",
+            },
         });
     });
 
