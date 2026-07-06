@@ -8,7 +8,20 @@ const wsPort = Number(process.env.ACP_WS_PORT ?? 5174);
 const vitePort = Number(process.env.ACP_UI_VITE_PORT ?? 5173);
 
 export default defineConfig({
-    plugins: [react()],
+    plugins: [
+        react(),
+        {
+            name: "standalone-fixtures-route",
+            configureServer(server) {
+                server.middlewares.use((req, _res, next) => {
+                    if (req.url === "/fixtures" || req.url === "/fixtures/") {
+                        req.url = "/fixtures.html";
+                    }
+                    next();
+                });
+            },
+        },
+    ],
     root: dir,
     server: {
         port: vitePort,
@@ -18,6 +31,10 @@ export default defineConfig({
                 target: `ws://127.0.0.1:${wsPort}`,
                 ws: true,
                 rewrite: () => "/",
+            },
+            "/api": {
+                target: `http://127.0.0.1:${wsPort}`,
+                changeOrigin: true,
             },
         },
     },

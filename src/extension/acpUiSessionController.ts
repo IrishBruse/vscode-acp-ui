@@ -41,9 +41,9 @@ import {
     updateSessionHeader,
 } from "./acpUiSessionJsonl";
 import {
+    clearAcpUiSessionRuntimeSessionId,
     renameAcpUiSession,
     setAcpUiSessionAgentName,
-    clearAcpUiSessionRuntimeSessionId,
     setAcpUiSessionRuntimeSessionId,
 } from "./acpUiSessionsStore";
 import { getAcpUiExtensionActivation } from "./extensionServices";
@@ -145,10 +145,7 @@ export class AcpUiSessionController {
         const initPayload = await this.buildInitPayload(header);
         this.deferredJsonlReplayAtBootstrap =
             shouldDeferJsonlHistoryReplay(header);
-        if (
-            parsed.events.length > 0 &&
-            !this.deferredJsonlReplayAtBootstrap
-        ) {
+        if (parsed.events.length > 0 && !this.deferredJsonlReplayAtBootstrap) {
             this.post({
                 type: "historyReplay",
                 events: parsed.events as AcpUiHistoryReplayEvent[],
@@ -427,7 +424,8 @@ export class AcpUiSessionController {
                     void this.applySessionInfoUpdate(update);
                 },
                 onResumeSession: () => this.prepareSessionFileForResume(),
-                onLoadSessionFailed: () => this.restoreSessionFileAfterLoadFailure(),
+                onLoadSessionFailed: () =>
+                    this.restoreSessionFileAfterLoadFailure(),
             },
         );
         this.bridge = bridge;
@@ -438,7 +436,8 @@ export class AcpUiSessionController {
         try {
             await bridge.connect({
                 preferredModelId: preferred,
-                ...(runtimeSessionId !== undefined && runtimeSessionId.length > 0
+                ...(runtimeSessionId !== undefined &&
+                runtimeSessionId.length > 0
                     ? { runtimeSessionId }
                     : {}),
             });

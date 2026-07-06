@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+    applyMarkdownInlineEditorColors,
     buildMarkdownThemeCssVariables,
     buildMarkdownTypographyCssVariables,
+    buildSyntaxHighlightCssVariables,
     type ColorThemeJson,
     mergeColorThemeJson,
+    pickWebviewMarkdownThemeVariables,
     tokenColorRulesFromCustomizations,
 } from "./markdownThemeResolver";
 
@@ -38,6 +41,13 @@ describe("buildMarkdownThemeCssVariables", () => {
         expect(vars["--acp-markdown-h3-foreground"]).toBe("#569cd6");
         expect(vars["--acp-markdown-inline-code-foreground"]).toBe("#ce9178");
         expect(vars["--acp-markdown-inline-code-border"]).toBe("#454545");
+    });
+
+    it("maps fenced-code syntax token colors", () => {
+        const vars = buildSyntaxHighlightCssVariables(darkModernLikeTheme);
+        expect(vars["--vscode-symbolIcon-keywordForeground"]).toBe("#c586c0");
+        expect(vars["--vscode-stringForeground"]).toBe("#ce9178");
+        expect(vars["--acp-code-token-comment-foreground"]).toBe("#6a9955");
     });
 
     it("merges user token color customizations after theme rules", () => {
@@ -102,5 +112,30 @@ describe("mergeColorThemeJson", () => {
             "textPreformat.background": "#333333",
         });
         expect(merged.tokenColors).toHaveLength(2);
+    });
+});
+
+describe("applyMarkdownInlineEditorColors", () => {
+    it("overrides token-derived inline code foreground", () => {
+        const vars = buildMarkdownThemeCssVariables(darkModernLikeTheme);
+        expect(vars["--acp-markdown-inline-code-foreground"]).toBe("#ce9178");
+        applyMarkdownInlineEditorColors(vars, { inlineCode: "#C678DD" });
+        expect(vars["--acp-markdown-inline-code-foreground"]).toBe("#C678DD");
+    });
+});
+
+describe("pickWebviewMarkdownThemeVariables", () => {
+    it("keeps heading and syntax variables for webview init", () => {
+        const picked = pickWebviewMarkdownThemeVariables({
+            "--vscode-editor-background": "#282c34",
+            "--acp-markdown-h1-foreground": "#D19A66",
+            "--acp-markdown-h2-foreground": "#E06C75",
+            "--vscode-symbolIcon-keywordForeground": "#C678DD",
+            "": "skip",
+        });
+        expect(picked["--acp-markdown-h1-foreground"]).toBe("#D19A66");
+        expect(picked["--acp-markdown-h2-foreground"]).toBe("#E06C75");
+        expect(picked["--vscode-symbolIcon-keywordForeground"]).toBe("#C678DD");
+        expect(picked["--vscode-editor-background"]).toBeUndefined();
     });
 });

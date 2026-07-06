@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const chatsDir = join(root, "standalone/fixtures/chats");
+const fixturesDir = join(root, "standalone/fixtures");
 const sessionId = "acp-ui-showcase-session";
 
 type SessionUpdate = Record<string, unknown>;
@@ -141,7 +142,10 @@ mkdirSync(chatsDir, { recursive: true });
 
 writeFixture("markdown", [
     userText("Show me how assistant markdown renders in ACP UI."),
-    thoughtText("Prepare a compact markdown sample with headings and code.", 2400),
+    thoughtText(
+        "Prepare a compact markdown sample with headings and code.",
+        2400,
+    ),
     agentText(markdownAgentMessage),
 ]);
 
@@ -194,7 +198,10 @@ writeFixture("plan", [
 
 writeFixture("showcase", [
     userText("Walk me through the main ACP UI rendering features."),
-    thoughtText("Show markdown, a read tool, a write diff, and the plan block.", 3200),
+    thoughtText(
+        "Show markdown, a read tool, a write diff, and the plan block.",
+        3200,
+    ),
     agentText(
         "## Overview\n\nACP UI renders streaming assistant markdown, tool calls, thoughts, and agent plans in one trace.\n",
     ),
@@ -233,4 +240,116 @@ writeFixture("showcase", [
     ),
 ]);
 
+const modeOption = {
+    id: "mode",
+    name: "Mode",
+    description: "Controls how the agent executes tasks",
+    category: "mode",
+    type: "select",
+    currentValue: "agent",
+    options: [
+        {
+            value: "agent",
+            name: "Agent",
+            description: "Full agent capabilities with tool access",
+        },
+        {
+            value: "plan",
+            name: "Plan",
+            description:
+                "Read-only mode for planning and designing before implementation",
+        },
+        {
+            value: "ask",
+            name: "Ask",
+            description: "Q&A mode - no edits or command execution",
+        },
+    ],
+};
+
+const cursorModelSeed = {
+    configOptions: [
+        modeOption,
+        {
+            id: "model",
+            name: "Model",
+            description: "Controls which model is used for responses",
+            category: "model",
+            type: "select",
+            currentValue: "composer-2[fast=true]",
+            options: [
+                { value: "composer-2[]", name: "composer-2" },
+                { value: "composer-2[fast=true]", name: "composer-2" },
+                { value: "composer-1.5[]", name: "composer-1.5" },
+            ],
+        },
+    ],
+};
+
+const opusModelSeed = {
+    configOptions: [
+        modeOption,
+        {
+            id: "model",
+            name: "Model",
+            category: "model",
+            type: "select",
+            currentValue: "claude-opus-4-8",
+            options: [
+                { value: "claude-opus-4-8", name: "Opus 4.8" },
+                { value: "claude-sonnet-4-6", name: "Sonnet 4.6" },
+            ],
+        },
+        {
+            id: "thinking",
+            name: "Thinking",
+            category: "model_config",
+            type: "boolean",
+            currentValue: false,
+        },
+        {
+            id: "context",
+            name: "Context",
+            category: "model_config",
+            type: "select",
+            currentValue: "300k",
+            options: [
+                { value: "200k", name: "200K" },
+                { value: "300k", name: "300K" },
+            ],
+        },
+        {
+            id: "effort",
+            name: "Effort",
+            category: "model_config",
+            type: "select",
+            currentValue: "extra_high",
+            options: [
+                { value: "low", name: "Low" },
+                { value: "medium", name: "Medium" },
+                { value: "high", name: "High" },
+                { value: "extra_high", name: "Extra High" },
+            ],
+        },
+        {
+            id: "fast",
+            name: "Fast",
+            category: "model_config",
+            type: "boolean",
+            currentValue: false,
+        },
+    ],
+};
+
+mkdirSync(fixturesDir, { recursive: true });
+writeFileSync(
+    join(fixturesDir, "cursor-model-seed.json"),
+    `${JSON.stringify(cursorModelSeed, null, 2)}\n`,
+);
+writeFileSync(
+    join(fixturesDir, "opus-model-seed.json"),
+    `${JSON.stringify(opusModelSeed, null, 2)}\n`,
+);
+
 console.log(`Wrote fixtures under ${chatsDir}`);
+console.log(`Wrote composer seeds under ${fixturesDir}`);

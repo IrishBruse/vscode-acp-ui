@@ -44,7 +44,15 @@ export type AcpUiSlashCommand = {
  * Messages sent from a webview (or other UI host) to the extension host.
  */
 export type WebviewToExtensionMessage =
-    | { type: "ready" }
+    | {
+          type: "ready";
+          /** Standalone dev: composer seed id (`cursor-model`, `opus-model`, ...). */
+          demoSeed?: string;
+          /** Standalone dev: chat replay id (`markdown`, `tools`, ...). */
+          demoFixture?: string;
+          /** Standalone dev: replay the fixture on load (default true when `demoFixture` is set). */
+          demoReplay?: boolean;
+      }
     | { type: "send"; body: string }
     | { type: "cancel" }
     | { type: "renameSession"; title: string }
@@ -249,7 +257,22 @@ export function tryParseWebviewMessage(
     const record = raw as Record<string, unknown>;
     const messageType = record.type;
     if (messageType === "ready") {
-        return { type: "ready" };
+        const ready: Extract<WebviewToExtensionMessage, { type: "ready" }> = {
+            type: "ready",
+        };
+        if (typeof record.demoSeed === "string" && record.demoSeed.length > 0) {
+            ready.demoSeed = record.demoSeed;
+        }
+        if (
+            typeof record.demoFixture === "string" &&
+            record.demoFixture.length > 0
+        ) {
+            ready.demoFixture = record.demoFixture;
+        }
+        if (typeof record.demoReplay === "boolean") {
+            ready.demoReplay = record.demoReplay;
+        }
+        return ready;
     }
     if (messageType === "send" && typeof record.body === "string") {
         return { type: "send", body: record.body };

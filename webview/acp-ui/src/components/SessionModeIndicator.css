@@ -11,8 +11,5 @@
 }
 
 .composer-mode-indicator--plan {
-    color: var(
-        --acp-composer-plan-foreground,
-        var(--vscode-editorWarning-foreground, #d18616)
-    );
+    color: var(--acp-composer-plan-foreground, #d18616);
 }

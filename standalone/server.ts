@@ -27,9 +27,10 @@ import {
     type ReadmeSessionSeed,
 } from "../src/acp/session/readmeSessionSeed";
 import { readCachedComposerSeed } from "../src/acp/session/sessionConfigOptionsCache";
-import type { AcpUiSessionModelSelection } from "../src/acp/session/sessionModels";
+import { pickWebviewMarkdownThemeVariables } from "../src/platform/markdownThemeResolver";
 import { FileAcpRpcNdjsonSink } from "../src/platform/node/fileRpcNdjsonSink";
 import { createNodeAcpSessionHostRuntime } from "../src/platform/node/nodeAcpSessionHostRuntime";
+import { resolveStandaloneThemeCssVariables } from "../src/platform/node/resolveStandaloneThemeCssVariables";
 import { formatPathWithTilde } from "../src/platform/pathDisplay";
 import {
     type ExtensionToWebviewMessage,
@@ -44,6 +45,11 @@ const DEMO_MODE =
     process.env.ACP_UI_SCREENSHOT === "1" ||
     process.env.ACP_UI_SCREENSHOT === "true";
 const DEMO_FIXTURE = process.env.ACP_UI_DEMO_FIXTURE ?? "showcase";
+const DEMO_SEED = process.env.ACP_UI_DEMO_SEED ?? "cursor-model";
+const DEMO_REPLAY = !(
+    process.env.ACP_UI_DEMO_REPLAY === "0" ||
+    process.env.ACP_UI_DEMO_REPLAY === "false"
+);
 
 const rpcLogEnv = process.env.ACP_RPC_LOG;
 const defaultRpcLogFile = join(STANDALONE_DIR, "acp-rpc.ndjson");
@@ -288,6 +294,20 @@ if (firstAgentConfig === undefined) {
     throw new Error("loadAgentConfigs returned empty");
 }
 
+function loadNamedComposerSeed(name: string): ReadmeSessionSeed {
+    const fixturePath = join(STANDALONE_DIR, "fixtures", `${name}-seed.json`);
+    if (!existsSync(fixturePath)) {
+        return { configOptions: null, modelSelection: null };
+    }
+    try {
+        return parseReadmeSessionSeedFromJson(
+            readFileSync(fixturePath, "utf-8"),
+        );
+    } catch {
+        return { configOptions: null, modelSelection: null };
+    }
+}
+
 function loadReadmeSessionSeed(): ReadmeSessionSeed {
     const fixturePath = join(STANDALONE_DIR, "fixtures", "readme-seed.json");
     if (existsSync(fixturePath)) {
@@ -315,9 +335,144 @@ function loadReadmeSessionSeed(): ReadmeSessionSeed {
     }
 }
 
+// ── Fixture catalog (HTTP + gallery page) ────────────────────────────────────
+
+type StandaloneFixtureEntry = {
+    id: string;
+    label: string;
+    description: string;
+};
+
+type StandaloneFixtureCatalog = {
+    chats: StandaloneFixtureEntry[];
+    seeds: StandaloneFixtureEntry[];
+};
+
+const CHAT_FIXTURE_META: Record<
+    string,
+    { label: string; description: string }
+> = {
+    showcase: {
+        label: "Showcase",
+        description:
+            "Markdown, tool calls, thoughts, and a plan block in one trace.",
+    },
+    markdown: {
+        label: "Markdown",
+        description: "Colored headings and syntax-highlighted fenced code.",
+    },
+    tools: {
+        label: "Tool calls",
+        description: "Read output, terminal runs, and file diffs.",
+    },
+    plan: {
+        label: "Plan",
+        description: "Structured agent plan with status and priority.",
+    },
+};
+
+const SEED_FIXTURE_META: Record<
+    string,
+    { label: string; description: string }
+> = {
+    "cursor-model": {
+        label: "Cursor-style picker",
+        description: "Composer 2 with a derived Fast toggle.",
+    },
+    "opus-model": {
+        label: "Agent-ordered picker",
+        description: "Opus 4.8 with Thinking, Context, Effort, and Fast.",
+    },
+    readme: {
+        label: "Full Cursor session",
+        description:
+            "Captured session/new bootstrap with bracket-encoded models.",
+    },
+};
+
+function humanizeFixtureId(id: string): string {
+    return id
+        .split(/[-_]+/)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+}
+
+function listStandaloneFixtures(): StandaloneFixtureCatalog {
+    const chats: StandaloneFixtureEntry[] = [];
+    const chatsDir = join(STANDALONE_DIR, "fixtures", "chats");
+    if (existsSync(chatsDir)) {
+        for (const name of readdirSync(chatsDir).sort()) {
+            if (!name.endsWith(".ndjson")) {
+                continue;
+            }
+            const id = name.slice(0, -".ndjson".length);
+            const meta = CHAT_FIXTURE_META[id];
+            chats.push({
+                id,
+                label: meta?.label ?? humanizeFixtureId(id),
+                description:
+                    meta?.description ??
+                    `Replay ${name} through the standalone bridge.`,
+            });
+        }
+    }
+
+    const seeds: StandaloneFixtureEntry[] = [];
+    const fixturesDir = join(STANDALONE_DIR, "fixtures");
+    if (existsSync(fixturesDir)) {
+        for (const name of readdirSync(fixturesDir).sort()) {
+            if (!name.endsWith("-seed.json")) {
+                continue;
+            }
+            const id = name.slice(0, -"-seed.json".length);
+            const meta = SEED_FIXTURE_META[id];
+            seeds.push({
+                id,
+                label: meta?.label ?? humanizeFixtureId(id),
+                description:
+                    meta?.description ??
+                    `Load ${name} as the composer model/config seed.`,
+            });
+        }
+    }
+
+    return { chats, seeds };
+}
+
+function vscodeThemeVariablesForInit(): Record<string, string> | undefined {
+    try {
+        const picked = pickWebviewMarkdownThemeVariables(
+            resolveStandaloneThemeCssVariables().variables,
+        );
+        return Object.keys(picked).length > 0 ? picked : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 // ── WebSocket server ──────────────────────────────────────────────────────────
 
-const httpServer = createServer();
+const httpServer = createServer((req, res) => {
+    if (req.url === "/api/fixtures" && req.method === "GET") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(listStandaloneFixtures()));
+        return;
+    }
+    if (req.url === "/api/standalone-theme" && req.method === "GET") {
+        try {
+            const theme = resolveStandaloneThemeCssVariables();
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify(theme));
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            res.writeHead(500, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: message }));
+        }
+        return;
+    }
+    res.writeHead(404);
+    res.end();
+});
 const wss = new WebSocketServer({ server: httpServer });
 
 wss.on("connection", (ws: WebSocket) => {
@@ -330,6 +485,9 @@ wss.on("connection", (ws: WebSocket) => {
     let userPreferredModelId: string | null = null;
     let selectedAgentName = firstAgentConfig.name;
     let connectInFlight: Promise<void> | null = null;
+    let sessionDemoSeed: string | undefined;
+    let sessionDemoFixture: string | undefined;
+    let sessionDemoReplay: boolean | undefined;
 
     const hostRuntime = createNodeAcpSessionHostRuntime({
         rpcNdjsonSink: sharedRpcSink,
@@ -343,7 +501,12 @@ wss.on("connection", (ws: WebSocket) => {
     }
 
     function resolveDemoFixturePath(name: string): string | null {
-        const chatFixture = join(STANDALONE_DIR, "fixtures", "chats", `${name}.ndjson`);
+        const chatFixture = join(
+            STANDALONE_DIR,
+            "fixtures",
+            "chats",
+            `${name}.ndjson`,
+        );
         if (existsSync(chatFixture)) {
             return chatFixture;
         }
@@ -361,8 +524,9 @@ wss.on("connection", (ws: WebSocket) => {
     function composerSeedForInit(): ReadmeSessionSeed {
         const cachedSeed = readCachedComposerSeed(selectedAgentName);
         const readmeSeed = loadReadmeSessionSeed();
-        if (DEMO_MODE) {
-            return { configOptions: null, modelSelection: null };
+        const seedId = sessionDemoSeed ?? (DEMO_MODE ? DEMO_SEED : undefined);
+        if (seedId !== undefined) {
+            return loadNamedComposerSeed(seedId);
         }
         return {
             configOptions:
@@ -372,11 +536,19 @@ wss.on("connection", (ws: WebSocket) => {
         };
     }
 
-    async function maybeReplayDemoFixture(): Promise<void> {
-        if (!DEMO_MODE) {
+    async function maybeReplayInitFixture(): Promise<void> {
+        const fixtureName =
+            sessionDemoFixture ?? (DEMO_MODE ? DEMO_FIXTURE : undefined);
+        if (fixtureName === undefined) {
             return;
         }
-        const fixturePath = resolveDemoFixturePath(DEMO_FIXTURE);
+        const shouldReplay =
+            sessionDemoReplay ??
+            (sessionDemoFixture !== undefined ? true : DEMO_REPLAY);
+        if (!shouldReplay) {
+            return;
+        }
+        const fixturePath = resolveDemoFixturePath(fixtureName);
         if (fixturePath === null) {
             return;
         }
@@ -454,12 +626,20 @@ wss.on("connection", (ws: WebSocket) => {
         }
 
         if (parsed.type === "ready") {
+            sessionDemoSeed = parsed.demoSeed;
+            sessionDemoFixture = parsed.demoFixture;
+            sessionDemoReplay = parsed.demoReplay;
             const workspaceFiles = workspaceFilesForAutocomplete(process.cwd());
             const seed = composerSeedForInit();
+            const demoSession =
+                DEMO_MODE ||
+                sessionDemoSeed !== undefined ||
+                sessionDemoFixture !== undefined;
+            const vscodeThemeVariables = vscodeThemeVariablesForInit();
             send({
                 type: "init",
                 sessionId,
-                title: DEMO_MODE ? "ACP UI (demo)" : "ACP UI (standalone)",
+                title: demoSession ? "ACP UI (demo)" : "ACP UI (standalone)",
                 workspaceLabel: formatPathWithTilde(process.cwd()),
                 agentVersionLabel: undefined,
                 acpAgentName: selectedAgentName,
@@ -471,11 +651,13 @@ wss.on("connection", (ws: WebSocket) => {
                 ...(seed.modelSelection !== null
                     ? { sessionModels: seed.modelSelection }
                     : {}),
-                ...(DEMO_MODE ? { hideComposerModelControls: true } : {}),
+                ...(vscodeThemeVariables !== undefined
+                    ? { vscodeThemeVariables }
+                    : {}),
                 lockSessionAgent: false,
             });
-            if (DEMO_MODE) {
-                void maybeReplayDemoFixture();
+            if (DEMO_MODE || sessionDemoFixture !== undefined) {
+                void maybeReplayInitFixture();
             }
             return;
         }
@@ -638,7 +820,7 @@ httpServer.listen(PORT, () => {
     console.log(`WebSocket bridge listening on ws://localhost:${PORT}`);
     if (DEMO_MODE) {
         console.log(
-            "Demo mode: fixture seed + replay, no live agent connection",
+            `Demo mode: seed=${DEMO_SEED}, fixture=${DEMO_FIXTURE}, replay=${DEMO_REPLAY}`,
         );
     }
     for (const c of agentConfigs) {
@@ -648,4 +830,5 @@ httpServer.listen(PORT, () => {
     console.log(
         `Open http://localhost:5173 after starting the Vite dev server`,
     );
+    console.log(`Fixture gallery: http://localhost:5173/fixtures`);
 });

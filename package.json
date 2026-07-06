@@ -5,6 +5,7 @@
         "dev:standalone": "concurrently --names FE,BE --prefix-colors cyan,yellow 'vite --config standalone/vite.config.ts' 'tsx --watch standalone/server.ts'",
         "dev:standalone:demo": "ACP_UI_DEMO=1 concurrently --names FE,BE --prefix-colors cyan,yellow 'vite --config standalone/vite.config.ts' 'tsx --watch standalone/server.ts'",
         "build:fixtures": "tsx scripts/build-showcase-fixtures.ts",
+        "sync:standalone-theme": "tsx scripts/sync-standalone-theme.ts",
         "screenshots": "npm run build:fixtures && tsx scripts/capture-readme-screenshots.ts",
         "build": "npm run build:webview && node esbuild.mjs",
         "watch": "node esbuild.mjs --watch",

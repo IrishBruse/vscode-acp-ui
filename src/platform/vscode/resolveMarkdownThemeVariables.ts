@@ -2,9 +2,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { extensions, workspace } from "vscode";
 import {
+    applyMarkdownInlineEditorColors,
     buildMarkdownThemeCssVariables,
     buildMarkdownTypographyCssVariables,
+    buildSyntaxHighlightCssVariables,
     type ColorThemeJson,
+    markdownInlineEditorColorKeys,
     mergeColorThemeJson,
     type TokenColorCustomizations,
     tokenColorRulesFromCustomizations,
@@ -49,6 +52,47 @@ function findThemePath(themeLabel: string): string | undefined {
     return undefined;
 }
 
+function readStringRecord(value: unknown): Record<string, string> {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+        return {};
+    }
+    const out: Record<string, string> = {};
+    for (const [key, entry] of Object.entries(value)) {
+        if (typeof entry === "string" && entry.length > 0) {
+            out[key] = entry;
+        }
+    }
+    return out;
+}
+
+function resolveWorkbenchColorCustomizations(
+    themeLabel: string,
+): Record<string, string> {
+    const raw = workspace
+        .getConfiguration("workbench")
+        .get<Record<string, unknown>>("colorCustomizations");
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+        return {};
+    }
+    const global = readStringRecord(raw);
+    const themeKey = `[${themeLabel}]`;
+    const scoped = raw[themeKey];
+    const scopedColors = readStringRecord(scoped);
+    return { ...global, ...scopedColors };
+}
+
+function readMarkdownInlineEditorColors(): Record<string, string> {
+    const config = workspace.getConfiguration("markdownInlineEditor");
+    const colors: Record<string, string> = {};
+    for (const key of markdownInlineEditorColorKeys()) {
+        const value = config.get<string>(`colors.${key}`);
+        if (typeof value === "string" && value.length > 0) {
+            colors[key] = value;
+        }
+    }
+    return colors;
+}
+
 /**
  * Resolves markdown heading colors and preview typography from the active VS Code
  * theme, editor settings, and markdown preview settings.
@@ -91,6 +135,10 @@ export async function resolveMarkdownThemeVariables(): Promise<
     }
 
     const theme = await readColorThemeJson(themePath);
+    const colorCustomizations = resolveWorkbenchColorCustomizations(themeLabel);
+    const mergedTheme = mergeColorThemeJson(theme, {
+        colors: colorCustomizations,
+    });
     const customizations = editorConfig.get<TokenColorCustomizations>(
         "tokenColorCustomizations",
     );
@@ -98,8 +146,14 @@ export async function resolveMarkdownThemeVariables(): Promise<
         customizations,
         themeLabel,
     );
-    return {
-        ...buildMarkdownThemeCssVariables(theme, customRules),
+    const variables: Record<string, string> = {
+        ...buildMarkdownThemeCssVariables(mergedTheme, customRules),
+        ...buildSyntaxHighlightCssVariables(mergedTheme, customRules),
         ...typography,
     };
+    applyMarkdownInlineEditorColors(
+        variables,
+        readMarkdownInlineEditorColors(),
+    );
+    return variables;
 }

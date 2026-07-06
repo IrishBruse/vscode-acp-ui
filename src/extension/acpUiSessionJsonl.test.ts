@@ -190,7 +190,9 @@ describe("shouldDeferJsonlHistoryReplay", () => {
             shouldDeferJsonlHistoryReplay({ runtimeSessionId: "runtime-1" }),
         ).toBe(true);
         expect(
-            shouldDeferJsonlHistoryReplay({ runtimeSessionId: "  runtime-1  " }),
+            shouldDeferJsonlHistoryReplay({
+                runtimeSessionId: "  runtime-1  ",
+            }),
         ).toBe(true);
     });
 

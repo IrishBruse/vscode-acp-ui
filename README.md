@@ -25,6 +25,14 @@ Open **ACP UI** from the activity bar to get a dedicated chat surface next to yo
 
 - **Chats** sidebar under the **ACP UI** activity bar: list sessions, open, refresh, delete.
 - **Session config** in the composer when the agent advertises model and tuning options.
+  Cursor-style bracketed models show a family picker plus derived params (for example **Fast**):
+
+  ![Cursor-style model picker](docs/Model-picker-cursor.png)
+
+  Agents that advertise explicit `model_config` options use a Zed-style toolbar (model, thinking, context, effort, and more):
+
+  ![Agent-ordered model picker](docs/Model-picker-opus.png)
+
 - **ACP UI RPC** output channel for debugging protocol traffic.
 - **Agent configuration** via `ib-acp-ui.agents` in settings (command, args, env per agent).
 
@@ -99,8 +107,11 @@ npm run dev:standalone:demo
 ```
 
 Then open http://localhost:5173.
-The demo loads `standalone/fixtures/chats/showcase.ndjson` automatically.
-Send `fixture-markdown`, `fixture-tools`, or `fixture-plan` in the composer to replay other samples.
+Browse mock chats and model-picker seeds from http://localhost:5173/fixtures.
+The standalone shell loads workbench colors and markdown syntax from your VS Code user settings (`~/.config/Code/User/settings.json` by default).
+Override with `ACP_UI_VSCODE_SETTINGS=/path/to/settings.json` if needed.
+In demo mode, send `fixture-markdown`, `fixture-tools`, or `fixture-plan` in the composer to replay other samples.
+Set `ACP_UI_DEMO_SEED=opus-model` to preview the agent-ordered model toolbar.
 
 Regenerate fixtures and README screenshots:
 
