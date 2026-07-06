@@ -11,7 +11,9 @@ If resume fails or the agent does not support load, ACP UI falls back to a new a
 Each chat is backed by a local transcript file.
 Closing and reopening the chat restores your message history from disk when agent-side resume is unavailable or fails.
 
-Planned: deleting a chat will notify the agent when it supports `session/delete`.
+The Chats sidebar lists agent sessions when the active agent supports `session/list`, and falls back to local `.acp` files when it does not.
+Deleting a chat removes the local transcript and notifies the agent when it supports `session/delete` and the chat has a stored runtime session id.
+
 The chat UI will also react to more agent-driven updates such as mode changes, config option updates, title sync, and usage meters.
 User message chunks during `session/load` replay already appear in the trace.
 
@@ -50,14 +52,15 @@ Task: [jsonl-persistence](../../tasks/jsonl-persistence.md).
 
 ### List and delete
 
-Not implemented for agent RPC.
-Local chat list and delete live in [acpUiSessionsStore.ts](../../../src/extension/acpUiSessionsStore.ts).
+When the active agent advertises `sessionCapabilities.list`, the Chats sidebar is driven by `session/list` for the workspace cwd.
+[refreshFromAgent](../../../src/extension/acpUiSessionsView.ts#L243-L285) calls [fetchAgentSessionsForWorkspace](../../../src/extension/acpAgentSessionLister.ts#L64-L93).
+That helper probes capabilities after `initialize` and paginates via [listAllSessions](../../../src/acp/infrastructure/acpAgentProcess.ts#L281-L296).
+When list is not advertised, the tree falls back to [listAcpUiSessionsForAgent](../../../src/extension/acpUiSessionsStore.ts#L151-L155).
 
-[supportsListSessions](../../../src/acp/infrastructure/acpAgentProcess.ts#L252-L257) exists on [AcpAgentProcess](../../../src/acp/infrastructure/acpAgentProcess.ts).
-[listSessions](../../../src/acp/infrastructure/acpAgentProcess.ts#L269-L279) is also implemented.
-[supportsDeleteSessions](../../../src/acp/infrastructure/acpAgentProcess.ts#L263-L267) is also implemented.
-
-They are not wired to UI delete flows yet.
+Deleting a chat calls [notifyAgentSessionDelete](../../../src/extension/acpUiSessionsView.ts#L457-L468).
+That invokes [deleteAgentSession](../../../src/extension/acpAgentSessionLister.ts#L98-L129) when a runtime session id is known.
+[deleteAgentSession](../../../src/extension/acpAgentSessionLister.ts#L98-L129) no-ops unless [supportsDeleteSessions](../../../src/acp/infrastructure/acpAgentProcess.ts#L263-L267) is true.
+Agent RPC failures are logged and local removal still completes.
 
 Task: [session-list-delete](../../tasks/session-list-delete.md).
 Protocol: [session list](../../acp/protocol/v1/session-list.mdx), [session delete](../../acp/protocol/v1/session-delete.mdx).

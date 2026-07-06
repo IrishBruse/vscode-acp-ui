@@ -16,7 +16,7 @@ Each task's YAML frontmatter links to a high-level feature doc under `docs/featu
 | Terminal capability | [terminal](../features/acp/terminal.md) | Not started | [terminal.md](./terminal.md) |
 | Terminal authentication | [authentication](../features/acp/authentication.md) | Not started | [terminal-auth.md](./terminal-auth.md) |
 | MCP servers forwarding | [mcp](../features/acp/mcp.md) | Not started | [mcp-servers.md](./mcp-servers.md) |
-| Session list / delete | [sessions](../features/acp/sessions.md) | Not started | [session-list-delete.md](./session-list-delete.md) |
+| Session list / delete | [sessions](../features/acp/sessions.md) | Done | [session-list-delete.md](./session-list-delete.md) |
 | `session/update` handlers | [sessions](../features/acp/sessions.md) | Not started | [session-update-handlers.md](./session-update-handlers.md) |
 | Cursor extension UX | [cursor-extensions](../features/ui/cursor-extensions.md) | Not started | [cursor-extension-ux.md](./cursor-extension-ux.md) |
 | Initialization metadata | [client](../features/acp/client.md) | Not started | [initialization-metadata.md](./initialization-metadata.md) |

@@ -6,6 +6,7 @@ import {
     deleteSessionFile,
     ensureSessionFileNameMatchesTitle,
     listSessionHeaders,
+    migrateFlatSessionFilesToFolderLayout,
     setAcpUiSessionJsonlLogger,
     updateSessionHeader,
 } from "./acpUiSessionJsonl";
@@ -129,6 +130,7 @@ export async function initializeAcpUiSessionsStore(
     sessions.length = 0;
     activeId = null;
     await migrateLegacyStorageIfNeeded();
+    await migrateFlatSessionFilesToFolderLayout(context);
     await reloadSessionsFromDisk();
     activeId = sessions[0]?.id ?? null;
 }
@@ -343,6 +345,7 @@ export async function renameAcpUiSession(
             extensionContext,
             row.uri,
             title,
+            id,
         );
     }
     return true;

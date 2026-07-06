@@ -18,7 +18,7 @@ function stripControlCharacters(value: string): string {
 }
 
 /**
- * Maps a chat title to a safe `.acp` file base name (including suffix).
+ * Maps a chat title to a safe `.acp` file name inside a session folder (including suffix).
  */
 export function sessionFileBaseNameFromTitle(title: string): string {
     let sanitized = stripControlCharacters(title)
@@ -39,7 +39,7 @@ export function sessionFileBaseNameFromTitle(title: string): string {
 }
 
 /**
- * Picks a unique `.acp` file name for `title` among `usedFileNames` (case-insensitive).
+ * Picks a unique `.acp` file name for `title` among `usedFileNames` in one session folder (case-insensitive).
  */
 export function uniqueSessionFileBaseNameFromTitle(
     title: string,

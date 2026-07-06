@@ -1,9 +1,76 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mockDeleteSession = vi.fn();
+const mockDispose = vi.fn();
+const mockSupportsDeleteSessions = vi.fn();
+const mockStart = vi.fn();
+
+vi.mock("../acp/infrastructure/acpAgentProcess", () => ({
+    AcpAgentProcess: class {
+        start = mockStart;
+        supportsDeleteSessions = mockSupportsDeleteSessions;
+        deleteSession = mockDeleteSession;
+        dispose = mockDispose;
+        authenticate = vi.fn();
+    },
+}));
+
+vi.mock("./extensionServices", () => ({
+    getAcpUiExtensionActivation: () => ({
+        rpcNdjsonSink: {
+            isLoggingEnabled: false,
+            appendRawNdjsonLine: () => {},
+            dispose: () => {},
+        },
+        outputChannel: { appendLine: () => {} },
+    }),
+}));
+
+vi.mock("../platform/vscode/defaultHostRuntime", () => ({
+    createDefaultAcpSessionHostRuntime: () => ({
+        hostFilesystem: {
+            readTextFile: async () => "",
+            writeTextFile: async () => {},
+        },
+        rpcNdjsonSink: {
+            isLoggingEnabled: false,
+            appendRawNdjsonLine: () => {},
+            dispose: () => {},
+        },
+        getWorkspaceRoot: () => "/tmp",
+    }),
+}));
+
+import { deleteAgentSession } from "./acpAgentSessionLister";
 import {
     sessionInfoLabel,
     sessionInfoSortKey,
     sortSessionInfos,
 } from "./acpAgentSessionListFormat";
+
+const testAgentConfig = { name: "Test", command: "echo", args: [] };
+
+describe("deleteAgentSession", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockStart.mockResolvedValue({});
+        mockDeleteSession.mockResolvedValue(undefined);
+    });
+
+    it("calls session/delete when the agent advertises delete", async () => {
+        mockSupportsDeleteSessions.mockReturnValue(true);
+        await deleteAgentSession(testAgentConfig, "sess-runtime-1");
+        expect(mockDeleteSession).toHaveBeenCalledWith("sess-runtime-1");
+        expect(mockDispose).toHaveBeenCalled();
+    });
+
+    it("skips session/delete when the agent does not advertise delete", async () => {
+        mockSupportsDeleteSessions.mockReturnValue(false);
+        await deleteAgentSession(testAgentConfig, "sess-runtime-1");
+        expect(mockDeleteSession).not.toHaveBeenCalled();
+        expect(mockDispose).toHaveBeenCalled();
+    });
+});
 
 describe("sessionInfoLabel", () => {
     it("uses title when present", () => {

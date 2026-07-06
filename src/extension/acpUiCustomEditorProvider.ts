@@ -83,6 +83,7 @@ export class AcpUiCustomEditorProvider implements CustomTextEditorProvider {
             this.context,
             document.uri,
             parsed.header.title,
+            parsed.header.id,
         );
         updateAcpUiSessionFileUri(parsed.header.id, sessionUri);
         const sessionDocument =

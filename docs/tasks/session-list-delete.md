@@ -1,5 +1,5 @@
 ---
-status: not-started
+status: done
 feature: docs/features/acp/sessions.md
 ---
 
@@ -15,35 +15,19 @@ feature: docs/features/acp/sessions.md
 ACP UI maintains a local VS Code "Chats" list only (`acpUiSessionsStore`).
 Deleting a chat removes local metadata but does not call `session/delete`, leaving orphan agent sessions.
 
-## Current behavior
-
-| Area | Today |
-| --- | --- |
-| Chats list | `acpUiSessionsStore` in workspace state (`acpUi.chats.v2`) |
-| `session/list` | Not called |
-| Delete chat | Local only, no `session/delete` |
-
-## Key files
-
-| Path | Role |
-| --- | --- |
-| `src/extension/acpUiSessionsStore.ts` | Local chat list |
-| `src/acp/infrastructure/acpAgentProcess.ts` | SDK session methods |
-| Chats sidebar / delete command handlers | Wire agent delete |
-
 ## Implementation checklist
 
 ### `session/list`
 
-- [ ] Detect agent `session/list` capability after `initialize`
-- [ ] Optional: merge or display agent sessions in UI (product decision)
-- [ ] At minimum: callable for debugging or future sync
+- [x] Detect agent `session/list` capability after `initialize`
+- [x] Optional: merge or display agent sessions in UI (product decision)
+- [x] At minimum: callable for debugging or future sync
 
 ### `session/delete`
 
-- [ ] On local chat delete, if capability present and runtime `sessionId` known, call `session/delete`
-- [ ] Handle agent errors gracefully (local delete still succeeds)
-- [ ] Tests for delete with and without capability
+- [x] On local chat delete, if capability present and runtime `sessionId` known, call `session/delete`
+- [x] Handle agent errors gracefully (local delete still succeeds)
+- [x] Tests for delete with and without capability
 
 ## Definition of done
 

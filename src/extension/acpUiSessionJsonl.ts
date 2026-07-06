@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { basename, isAbsolute } from "node:path";
+import { basename, dirname, isAbsolute } from "node:path";
 import {
     type ExtensionContext,
     FileType,
@@ -23,6 +23,7 @@ import {
     serializeSessionHeader,
     serializeSessionRecord,
     serializeSessionRpcRecord,
+    sessionFileBaseNameFromTitle,
     uniqueSessionFileBaseNameFromTitle,
 } from "./acpUiSessionJsonlFormat";
 
@@ -60,6 +61,7 @@ export {
 const sessionsDirectorySettingKey = "ib-acp-ui.sessionsDirectory";
 const sessionFilePrettyRpcSettingKey = "ib-acp-ui.sessionFilePrettyRpc";
 const chatsSubdir = "chats";
+const folderLayoutMigrationKey = "acpUi.chats.folderLayoutMigration.v1";
 
 let logWarn: ((message: string) => void) | null = null;
 
@@ -93,14 +95,34 @@ export function resolveSessionsDirectoryUri(context: ExtensionContext): Uri {
     return Uri.joinPath(folder.uri, configured);
 }
 
-export function sessionFileUriForId(
+/**
+ * Per-session directory under the chats root (`chats/<sessionId>/`).
+ * The `.acp` transcript file inside is named from the chat title.
+ */
+export function sessionDirectoryUriForId(
     context: ExtensionContext,
     sessionId: string,
 ): Uri {
+    return Uri.joinPath(resolveSessionsDirectoryUri(context), sessionId);
+}
+
+/**
+ * Resolves the `.acp` file path for a session id and title.
+ */
+export function sessionFileUriForId(
+    context: ExtensionContext,
+    sessionId: string,
+    title = "Chat",
+): Uri {
     return Uri.joinPath(
-        resolveSessionsDirectoryUri(context),
-        `${sessionId}${ACP_UI_SESSION_FILE_SUFFIX}`,
+        sessionDirectoryUriForId(context, sessionId),
+        sessionFileBaseNameFromTitle(title),
     );
+}
+
+/** True when the session file sits directly under the chats root (legacy layout). */
+export function isFlatSessionFileUri(uri: Uri, sessionsDir: Uri): boolean {
+    return dirname(uri.fsPath) === sessionsDir.fsPath;
 }
 
 async function listSessionFileNamesInDirectory(dir: Uri): Promise<Set<string>> {
@@ -122,10 +144,12 @@ async function listSessionFileNamesInDirectory(dir: Uri): Promise<Set<string>> {
 
 async function resolveSessionFileUriForTitle(
     context: ExtensionContext,
+    sessionId: string,
     title: string,
     options?: { excludeUri?: Uri },
 ): Promise<Uri> {
-    const dir = await ensureSessionsDirectory(context);
+    const dir = sessionDirectoryUriForId(context, sessionId);
+    await workspace.fs.createDirectory(dir);
     const used = await listSessionFileNamesInDirectory(dir);
     const excludeFileName =
         options?.excludeUri !== undefined
@@ -137,6 +161,28 @@ async function resolveSessionFileUriForTitle(
         excludeFileName,
     );
     return Uri.joinPath(dir, fileName);
+}
+
+/**
+ * Moves a session file into `chats/<sessionId>/` when it still uses the legacy flat layout.
+ */
+async function ensureSessionFileInFolder(
+    context: ExtensionContext,
+    uri: Uri,
+    sessionId: string,
+): Promise<Uri> {
+    const sessionsDir = resolveSessionsDirectoryUri(context);
+    const parentName = basename(dirname(uri.fsPath));
+    if (!isFlatSessionFileUri(uri, sessionsDir) && parentName === sessionId) {
+        return uri;
+    }
+    const sessionDir = sessionDirectoryUriForId(context, sessionId);
+    await workspace.fs.createDirectory(sessionDir);
+    const dest = Uri.joinPath(sessionDir, basename(uri.fsPath));
+    if (uri.toString() !== dest.toString()) {
+        await workspace.fs.rename(uri, dest, { overwrite: false });
+    }
+    return dest;
 }
 
 function sessionFileNamesMatch(current: string, expected: string): boolean {
@@ -151,16 +197,21 @@ export async function ensureSessionFileNameMatchesTitle(
     context: ExtensionContext,
     uri: Uri,
     title: string,
+    sessionId: string,
 ): Promise<Uri> {
-    const targetUri = await resolveSessionFileUriForTitle(context, title, {
-        excludeUri: uri,
-    });
-    const currentName = basename(uri.fsPath);
+    const inFolder = await ensureSessionFileInFolder(context, uri, sessionId);
+    const targetUri = await resolveSessionFileUriForTitle(
+        context,
+        sessionId,
+        title,
+        { excludeUri: inFolder },
+    );
+    const currentName = basename(inFolder.fsPath);
     const targetName = basename(targetUri.fsPath);
     if (sessionFileNamesMatch(currentName, targetName)) {
-        return uri;
+        return inFolder;
     }
-    await workspace.fs.rename(uri, targetUri, { overwrite: false });
+    await workspace.fs.rename(inFolder, targetUri, { overwrite: false });
     return targetUri;
 }
 
@@ -219,7 +270,11 @@ export async function createSessionFile(
 ): Promise<{ id: string; uri: Uri; header: AcpUiSessionHeader }> {
     await ensureSessionsDirectory(context);
     const header = buildSessionHeader(title, options);
-    const uri = await resolveSessionFileUriForTitle(context, header.title);
+    const uri = await resolveSessionFileUriForTitle(
+        context,
+        header.id,
+        header.title,
+    );
     const content = serializeSessionHeader(header);
     await workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
     return { id: header.id, uri, header };
@@ -439,11 +494,133 @@ export async function updateSessionHeader(
  */
 export async function deleteSessionFile(uri: Uri): Promise<void> {
     await flushPendingSessionFileWrites(uri);
+    const sessionDir = Uri.joinPath(uri, "..");
     try {
-        await workspace.fs.delete(uri, { useTrash: true });
+        await workspace.fs.delete(sessionDir, {
+            recursive: true,
+            useTrash: true,
+        });
     } catch {
-        // File may already be gone.
+        try {
+            await workspace.fs.delete(uri, { useTrash: true });
+        } catch {
+            // File may already be gone.
+        }
     }
+}
+
+async function readSessionHeaderAtUri(
+    uri: Uri,
+): Promise<{ header: AcpUiSessionHeader; uri: Uri } | null> {
+    try {
+        const bytes = await workspace.fs.readFile(uri);
+        const parsed = parseSessionFile(Buffer.from(bytes).toString("utf8"));
+        if (parsed.header !== null) {
+            return { header: parsed.header, uri };
+        }
+    } catch {
+        // Skip unreadable files.
+    }
+    return null;
+}
+
+async function listSessionHeadersInDirectory(
+    dir: Uri,
+): Promise<Array<{ header: AcpUiSessionHeader; uri: Uri }>> {
+    let entries: [string, FileType][];
+    try {
+        entries = await workspace.fs.readDirectory(dir);
+    } catch {
+        return [];
+    }
+    const out: Array<{ header: AcpUiSessionHeader; uri: Uri }> = [];
+    for (const [name, fileType] of entries) {
+        if (
+            fileType === FileType.File &&
+            name.endsWith(ACP_UI_SESSION_FILE_SUFFIX)
+        ) {
+            const row = await readSessionHeaderAtUri(Uri.joinPath(dir, name));
+            if (row !== null) {
+                out.push(row);
+            }
+            continue;
+        }
+        if (fileType !== FileType.Directory) {
+            continue;
+        }
+        const sessionDir = Uri.joinPath(dir, name);
+        let sessionEntries: [string, FileType][];
+        try {
+            sessionEntries = await workspace.fs.readDirectory(sessionDir);
+        } catch {
+            continue;
+        }
+        for (const [sessionFileName, sessionFileType] of sessionEntries) {
+            if (
+                sessionFileType !== FileType.File ||
+                !sessionFileName.endsWith(ACP_UI_SESSION_FILE_SUFFIX)
+            ) {
+                continue;
+            }
+            const row = await readSessionHeaderAtUri(
+                Uri.joinPath(sessionDir, sessionFileName),
+            );
+            if (row !== null) {
+                out.push(row);
+            }
+        }
+    }
+    return out;
+}
+
+/**
+ * Moves legacy flat `chats/*.acp` files into `chats/<sessionId>/<title>.acp`.
+ */
+export async function migrateFlatSessionFilesToFolderLayout(
+    context: ExtensionContext,
+): Promise<void> {
+    if (context.globalState.get<boolean>(folderLayoutMigrationKey) === true) {
+        return;
+    }
+    const dir = await ensureSessionsDirectory(context);
+    let entries: [string, FileType][];
+    try {
+        entries = await workspace.fs.readDirectory(dir);
+    } catch {
+        await context.globalState.update(folderLayoutMigrationKey, true);
+        return;
+    }
+    for (const [name, fileType] of entries) {
+        if (
+            fileType !== FileType.File ||
+            !name.endsWith(ACP_UI_SESSION_FILE_SUFFIX)
+        ) {
+            continue;
+        }
+        const uri = Uri.joinPath(dir, name);
+        const row = await readSessionHeaderAtUri(uri);
+        if (row === null) {
+            continue;
+        }
+        try {
+            const inFolder = await ensureSessionFileInFolder(
+                context,
+                uri,
+                row.header.id,
+            );
+            await ensureSessionFileNameMatchesTitle(
+                context,
+                inFolder,
+                row.header.title,
+                row.header.id,
+            );
+        } catch {
+            logWarn?.(
+                `Failed to migrate chat "${row.header.title}" to folder layout.`,
+            );
+        }
+    }
+    await context.globalState.update(folderLayoutMigrationKey, true);
 }
 
 /**
@@ -458,33 +635,7 @@ export async function listSessionHeaders(
     } catch {
         return [];
     }
-    let entries: [string, FileType][];
-    try {
-        entries = await workspace.fs.readDirectory(dir);
-    } catch {
-        return [];
-    }
-    const out: Array<{ header: AcpUiSessionHeader; uri: Uri }> = [];
-    for (const [name, fileType] of entries) {
-        if (
-            fileType !== FileType.File ||
-            !name.endsWith(ACP_UI_SESSION_FILE_SUFFIX)
-        ) {
-            continue;
-        }
-        const uri = Uri.joinPath(dir, name);
-        try {
-            const bytes = await workspace.fs.readFile(uri);
-            const parsed = parseSessionFile(
-                Buffer.from(bytes).toString("utf8"),
-            );
-            if (parsed.header !== null) {
-                out.push({ header: parsed.header, uri });
-            }
-        } catch {
-            // Skip unreadable files.
-        }
-    }
+    const out = await listSessionHeadersInDirectory(dir);
     out.sort((a, b) => a.header.updatedAt - b.header.updatedAt);
     return out;
 }
