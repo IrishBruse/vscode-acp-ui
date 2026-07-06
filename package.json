@@ -17,6 +17,7 @@
         "format": "biome format --write .",
         "verify": "concurrently --names Build,Check,Test,Lint 'npm run build' 'npm run check' 'npm run test' 'npm run lint'",
         "publish:vscode": "bash scripts/publish.sh",
+        "install:local": "bash scripts/install-local.sh",
         "sync:docs": "bash scripts/sync-docs.sh"
     },
     "name": "ib-acp-ui",
@@ -147,7 +148,7 @@
         ],
         "configurationDefaults": {
             "files.associations": {
-                "*.acp": "jsonc"
+                "*.acp": "jsonl"
             },
             "files.readonlyInclude": {
                 "**/*.acp": true

@@ -242,7 +242,7 @@ export class AcpAgentProcess {
         if (!this.connection || !this.supportsLogout()) {
             return;
         }
-        await this.connection.unstable_logout({});
+        await this.connection.logout({});
     }
 
     getInitializeResponse(): acp.InitializeResponse | null {
@@ -335,7 +335,7 @@ export class AcpAgentProcess {
         if (!this.connection) {
             throw new Error("Agent not started");
         }
-        await this.connection.unstable_setSessionModel({ sessionId, modelId });
+        await this.connection.setSessionMode({ sessionId, modeId: modelId });
     }
 
     async setSessionConfigOption(

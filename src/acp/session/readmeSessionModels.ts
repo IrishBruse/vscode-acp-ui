@@ -1,8 +1,11 @@
-import type { SessionModelState } from "@agentclientprotocol/sdk";
-import type { AcpUiSessionModelSelection } from "./sessionModels";
+import type { SessionModeState } from "@agentclientprotocol/sdk";
+import {
+    type AcpUiSessionModelSelection,
+    sessionModelStateToAcpUiSelection,
+} from "./sessionModels";
 
 /**
- * Extracts `result.models` from a captured ACP NDJSON log (e.g. `standalone/mock/readme.ndjson`).
+ * Extracts `result.modes` from a captured ACP NDJSON log (e.g. `standalone/mock/readme.ndjson`).
  */
 export function parseSessionModelsFromReadmeNdjson(
     text: string,
@@ -27,24 +30,18 @@ export function parseSessionModelsFromReadmeNdjson(
             continue;
         }
         const resultRecord = result as Record<string, unknown>;
-        const models = resultRecord.models;
-        if (models === null || typeof models !== "object") {
+        const modes = resultRecord.modes;
+        if (modes === null || typeof modes !== "object") {
             continue;
         }
-        const ms = models as SessionModelState;
+        const modeState = modes as SessionModeState;
         if (
-            !Array.isArray(ms.availableModels) ||
-            typeof ms.currentModelId !== "string"
+            !Array.isArray(modeState.availableModes) ||
+            typeof modeState.currentModeId !== "string"
         ) {
             continue;
         }
-        return {
-            currentModelId: ms.currentModelId,
-            availableModels: ms.availableModels.map((m) => ({
-                modelId: m.modelId,
-                name: m.name,
-            })),
-        };
+        return sessionModelStateToAcpUiSelection(modeState);
     }
     return null;
 }

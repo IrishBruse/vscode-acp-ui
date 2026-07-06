@@ -30,4 +30,4 @@ if [[ "${SKIP_VERIFY:-}" != "1" ]]; then
     npm run verify
 fi
 
-exec npx @vscode/vsce publish "$@"
+exec npx @vscode/vsce publish --skip-license "$@"

@@ -527,11 +527,11 @@ export class AcpSessionBridge {
             bootstrap.configOptions !== null
         ) {
             this.applyConfigOptions(bootstrap.configOptions);
-        } else if (bootstrap.models) {
-            let state = bootstrap.models;
+        } else if (bootstrap.modes) {
+            let state = bootstrap.modes;
             if (
                 preferredModelId !== undefined &&
-                preferredModelId !== state.currentModelId &&
+                preferredModelId !== state.currentModeId &&
                 this.acpSessionId !== null
             ) {
                 try {
@@ -539,7 +539,7 @@ export class AcpSessionBridge {
                         this.acpSessionId,
                         preferredModelId,
                     );
-                    state = { ...state, currentModelId: preferredModelId };
+                    state = { ...state, currentModeId: preferredModelId };
                 } catch {}
             }
             const selection = sessionModelStateToAcpUiSelection(state);
@@ -550,7 +550,7 @@ export class AcpSessionBridge {
         if (
             bootstrap.configOptions !== undefined &&
             bootstrap.configOptions !== null &&
-            bootstrap.models &&
+            bootstrap.modes &&
             preferredModelId !== undefined
         ) {
             const modelOption = this.lastConfigOptions?.options.find(
@@ -640,7 +640,7 @@ export class AcpSessionBridge {
 
     /**
      * Applies a model id via `set_config_option` when advertised, otherwise
-     * `unstable_setSessionModel` for composed bracket ids the agent omits.
+     * `setSessionMode` for composed bracket ids the agent omits.
      */
     private async applySessionModelWireValue(
         configId: string,

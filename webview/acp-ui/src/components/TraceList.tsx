@@ -1,7 +1,7 @@
 import type { ReactElement } from "react";
 import "./TraceList.css";
-import type { ToolCallVerbosity } from "../../../src/protocol/extensionHostMessages";
-import type { WorkspacePathOpenTarget } from "../../../src/protocol/extensionHostMessages";
+import type { ToolCallVerbosity } from "../../../../src/protocol/extensionHostMessages";
+import type { WorkspacePathOpenTarget } from "../../../../src/protocol/extensionHostMessages";
 import type { TraceItem, TraceToolItem } from "../chatReducer";
 import { AgentMarkdown } from "./AgentMarkdown";
 import { AgentThoughtBlock } from "./AgentThoughtBlock";

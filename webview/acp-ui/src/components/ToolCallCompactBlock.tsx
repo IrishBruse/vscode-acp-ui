@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactElement } from "react";
-import type { WorkspacePathOpenTarget } from "../../../src/protocol/extensionHostMessages";
+import type { WorkspacePathOpenTarget } from "../../../../src/protocol/extensionHostMessages";
 import "./ToolCallCompactBlock.css";
 import type { TraceToolItem } from "../chatReducer";
 import {

@@ -1,8 +1,35 @@
+# Dev tooling
 .vscode/**
 .vscode-test/**
+.git/**
+.github/**
+.cursor/**
+node_modules/**
+**/*.map
+*.vsix
+
+# Source and dev apps (runtime uses dist/ + media/)
 src/**
+webview/**
+standalone/**
+scripts/**
+docs/**
+
+# Build, test, and lint config
 tsconfig.json
 esbuild.mjs
 biome.json
-node_modules/**
-**/*.map
+vitest.config.ts
+package-lock.json
+
+# Repo metadata
+.cursorignore
+.gitignore
+.nvmrc
+AGENTS.md
+ARCHITECTURE.md
+icon.svg
+
+# Tests
+**/*.test.ts
+**/*.test.tsx

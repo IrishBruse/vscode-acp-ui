@@ -97,6 +97,7 @@ npm run watch      # extension esbuild watch (run build:webview first or after U
 npm run check      # TypeScript
 npm run test       # vitest
 npm run verify     # build + check + test + lint
+npm run install:local  # package .vsix and install into local VS Code (`code`)
 ```
 
 For a browser-only UI loop without VS Code, use `npm run dev:standalone` (see `standalone/`).
