@@ -110,9 +110,14 @@
     );
 }
 
-.agent-markdown pre {
+.agent-markdown-code-block {
+    position: relative;
     margin: 0.5em 0 0.75em;
-    padding: 8px 10px;
+}
+
+.agent-markdown-code-block > pre {
+    margin: 0;
+    padding: 8px 36px 10px 10px;
     overflow: auto;
     border-radius: 4px;
     background-color: var(
@@ -121,6 +126,61 @@
     );
     border: 1px solid
         color-mix(in srgb, var(--vscode-widget-border) 80%, transparent);
+}
+
+.agent-markdown-code-block-copy {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: color-mix(
+        in srgb,
+        var(--vscode-editor-background) 55%,
+        transparent
+    );
+    color: var(
+        --vscode-descriptionForeground,
+        var(--vscode-foreground)
+    );
+    cursor: pointer;
+    opacity: 0;
+    transition:
+        opacity 0.12s ease,
+        color 0.12s ease,
+        background-color 0.12s ease;
+}
+
+.agent-markdown-code-block:hover .agent-markdown-code-block-copy,
+.agent-markdown-code-block-copy:focus-visible {
+    opacity: 1;
+}
+
+.agent-markdown-code-block-copy:hover {
+    color: var(--vscode-foreground);
+    background-color: color-mix(
+        in srgb,
+        var(--vscode-editor-background) 80%,
+        transparent
+    );
+}
+
+.agent-markdown-code-block-copy:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+.agent-markdown-code-block-copy-icon {
+    width: 14px;
+    height: 14px;
+    display: block;
 }
 
 .agent-markdown pre code {
