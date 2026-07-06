@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added `minimal` tool call verbosity: groups tool calls with a summary line and shows only the last three detail lines (Cursor-style).
+  `compact` now shows one line per tool call with no group summary.
+  `verbose` is unchanged (full blocks with previews and diffs).
+
 ## 0.4.0 - 2026-07-06
 
 - Added `ib-acp-ui.toolCallVerbosity` setting (`verbose` or `compact`) to switch tool calls between full blocks and single-line summaries.

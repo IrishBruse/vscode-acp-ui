@@ -9,7 +9,10 @@ import { PlanBlock } from "./PlanBlock";
 import { ToolCallBlock } from "./ToolCallBlock";
 import { ToolCallCompactBlock } from "./ToolCallCompactBlock";
 import { ToolCallCompactExecuteBlock } from "./ToolCallCompactExecuteBlock";
-import { isCompactGroupableTool } from "../toolCallCompactText";
+import {
+    compactGroupMaxVisibleDetails,
+    isCompactGroupableTool,
+} from "../toolCallCompactText";
 
 function traceSegmentGapClass(
     previousType: TraceItem["type"] | undefined,
@@ -28,7 +31,16 @@ function traceSegmentGapClass(
 type TraceRenderSegment =
     | { kind: "single"; item: TraceItem; index: number }
     | { kind: "toolGroup"; tools: TraceToolItem[]; index: number }
+    | { kind: "toolCompactSingle"; tool: TraceToolItem; index: number }
     | { kind: "toolExecute"; tool: TraceToolItem; index: number };
+
+function usesCompactToolPresentation(
+    toolCallVerbosity: ToolCallVerbosity,
+): boolean {
+    return (
+        toolCallVerbosity === "minimal" || toolCallVerbosity === "compact"
+    );
+}
 
 function flushToolBuffer(
     segments: TraceRenderSegment[],
@@ -39,12 +51,21 @@ function flushToolBuffer(
     if (toolBuffer.length === 0) {
         return;
     }
-    if (toolCallVerbosity === "compact") {
+    if (toolCallVerbosity === "minimal") {
         segments.push({
             kind: "toolGroup",
             tools: toolBuffer,
             index: groupStartIndex,
         });
+    } else if (toolCallVerbosity === "compact") {
+        for (let i = 0; i < toolBuffer.length; i++) {
+            const tool = toolBuffer[i]!;
+            segments.push({
+                kind: "toolCompactSingle",
+                tool,
+                index: groupStartIndex + i,
+            });
+        }
     } else {
         for (let i = 0; i < toolBuffer.length; i++) {
             const tool = toolBuffer[i]!;
@@ -79,11 +100,23 @@ function partitionTraceSegments(
         }
         if (item.type === "tool") {
             if (
-                toolCallVerbosity === "compact" &&
+                usesCompactToolPresentation(toolCallVerbosity) &&
                 !isCompactGroupableTool(item)
             ) {
                 flushTools();
                 segments.push({ kind: "toolExecute", tool: item, index });
+                continue;
+            }
+            if (toolCallVerbosity === "minimal") {
+                if (toolBuffer.length === 0) {
+                    groupStartIndex = index;
+                }
+                toolBuffer.push(item);
+                continue;
+            }
+            if (toolCallVerbosity === "compact") {
+                flushTools();
+                segments.push({ kind: "toolCompactSingle", tool: item, index });
                 continue;
             }
             if (toolBuffer.length === 0) {
@@ -157,6 +190,22 @@ export function TraceList({
                     );
                 }
 
+                if (segment.kind === "toolCompactSingle") {
+                    const gapClass = traceSegmentGapClass(
+                        previousVisibleType,
+                        "tool",
+                    );
+                    previousVisibleType = "tool";
+                    return (
+                        <ToolCallCompactBlock
+                            key={segment.tool.toolCallId}
+                            className={gapClass.trim()}
+                            items={[segment.tool]}
+                            onOpenWorkspacePath={onOpenWorkspacePath}
+                        />
+                    );
+                }
+
                 if (segment.kind === "toolGroup") {
                     const gapClass = traceSegmentGapClass(
                         previousVisibleType,
@@ -170,6 +219,7 @@ export function TraceList({
                                 .join(":")}
                             className={gapClass.trim()}
                             items={segment.tools}
+                            maxVisibleDetails={compactGroupMaxVisibleDetails}
                             onOpenWorkspacePath={onOpenWorkspacePath}
                         />
                     );

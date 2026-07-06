@@ -4,6 +4,7 @@ import "./ToolCallCompactBlock.css";
 import type { TraceToolItem } from "../chatReducer";
 import {
     type CompactToolDetailParts,
+    compactGroupHiddenDetailCount,
     compactToolDetailParts,
     compactToolGroupSummaryParts,
     compactToolShowsDiffStats,
@@ -208,10 +209,13 @@ function CompactGroupSummary({
 export function ToolCallCompactBlock({
     items,
     className,
+    maxVisibleDetails,
     onOpenWorkspacePath,
 }: {
     items: TraceToolItem[];
     className?: string;
+    /** When set, grouped blocks show only the last N detail lines. */
+    maxVisibleDetails?: number;
     onOpenWorkspacePath?: (
         path: string,
         options?: OpenWorkspacePathOptions,
@@ -221,13 +225,26 @@ export function ToolCallCompactBlock({
     const inProgress = items.some(
         (item) => item.status === "pending" || item.status === "in_progress",
     );
+    const visibleItems =
+        maxVisibleDetails === undefined || single
+            ? items
+            : items.slice(-maxVisibleDetails);
+    const hiddenDetailCount =
+        maxVisibleDetails === undefined || single
+            ? 0
+            : compactGroupHiddenDetailCount(items.length, maxVisibleDetails);
+    const truncatedDetails = hiddenDetailCount > 0;
 
     return (
         <div
             className={
                 className === undefined || className.length === 0
-                    ? "tool-call-compact"
-                    : `tool-call-compact ${className}`
+                    ? truncatedDetails
+                        ? "tool-call-compact tool-call-compact--truncated-details"
+                        : "tool-call-compact"
+                    : truncatedDetails
+                      ? `tool-call-compact tool-call-compact--truncated-details ${className}`
+                      : `tool-call-compact ${className}`
             }
             data-status={inProgress ? "in_progress" : "completed"}
             role="status"
@@ -251,7 +268,15 @@ export function ToolCallCompactBlock({
                     className="tool-call-compact-details"
                     aria-label="Tool details"
                 >
-                    {items.map((item) => (
+                    {hiddenDetailCount > 0 ? (
+                        <li
+                            className="tool-call-compact-hidden-row"
+                            aria-hidden="true"
+                        >
+                            ... {hiddenDetailCount} earlier items hidden
+                        </li>
+                    ) : null}
+                    {visibleItems.map((item) => (
                         <li
                             key={item.toolCallId}
                             className="tool-call-compact-detail-row"

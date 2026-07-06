@@ -249,28 +249,28 @@ export function compactToolGroupSummaryParts(
     const counts = countToolKinds(items);
     const verbs: string[] = [];
     const countParts: string[] = [];
+    if (counts.read > 0) {
+        verbs.push("Read");
+        countParts.push(pluralCount(counts.read, "file", "files"));
+    }
     if (counts.search > 0) {
-        verbs.push("Grepped");
+        verbs.push("grepped");
         countParts.push(pluralCount(counts.search, "grep", "greps"));
     }
     if (counts.glob > 0) {
-        verbs.push("Globbed");
+        verbs.push("globbed");
         countParts.push(pluralCount(counts.glob, "glob", "globs"));
     }
-    if (counts.read > 0) {
-        verbs.push("read");
-        countParts.push(pluralCount(counts.read, "file", "files"));
-    }
     if (counts.edit > 0) {
-        verbs.push("Edited");
+        verbs.push("edited");
         countParts.push(pluralCount(counts.edit, "edit", "edits"));
     }
     if (counts.execute > 0) {
-        verbs.push("Ran");
+        verbs.push("ran");
         countParts.push(pluralCount(counts.execute, "command", "commands"));
     }
     if (counts.other > 0) {
-        verbs.push("Used tools");
+        verbs.push("used tools");
         countParts.push(pluralCount(counts.other, "tool", "tools"));
     }
     if (verbs.length === 0) {
@@ -423,6 +423,20 @@ export function compactToolShowsDiffStats(item: TraceToolItem): boolean {
 }
 
 export const compactExecutePreviewLineCount = 3;
+
+/** Grouped minimal mode shows only the last N per-tool detail lines. */
+export const compactGroupMaxVisibleDetails = 3;
+
+/** How many grouped tool lines are hidden when truncating to `maxVisible`. */
+export function compactGroupHiddenDetailCount(
+    itemCount: number,
+    maxVisible: number,
+): number {
+    if (maxVisible <= 0 || itemCount <= maxVisible) {
+        return 0;
+    }
+    return itemCount - maxVisible;
+}
 
 export function isExecuteTool(item: TraceToolItem): boolean {
     const kind = normalizedKind(item);

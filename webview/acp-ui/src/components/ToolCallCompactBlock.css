@@ -12,12 +12,56 @@
 
 .tool-call-compact-summary-verbs {
     color: var(--vscode-foreground);
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .tool-call-compact-summary-counts {
     color: var(--vscode-descriptionForeground);
     font-weight: 400;
+}
+
+.tool-call-compact-hidden-row {
+    margin: 0;
+    color: var(--vscode-descriptionForeground);
+    word-break: break-word;
+}
+
+.tool-call-compact--truncated-details .tool-call-compact-detail-row .tool-call-compact-verb {
+    color: var(--vscode-descriptionForeground);
+    font-weight: 400;
+}
+
+.tool-call-compact--truncated-details
+    .tool-call-compact-detail-row
+    .tool-call-compact-detail-text {
+    color: var(--vscode-foreground);
+    font-weight: 400;
+}
+
+.tool-call-compact--truncated-details
+    .tool-call-compact-detail-row
+    .tool-call-compact-detail-text
+    .tool-call-compact-path-link,
+.tool-call-compact--truncated-details
+    .tool-call-compact-detail-row
+    .tool-call-compact-detail-text
+    .tool-call-compact-path-link:link,
+.tool-call-compact--truncated-details
+    .tool-call-compact-detail-row
+    .tool-call-compact-detail-text
+    .tool-call-compact-path-link:visited {
+    color: var(--vscode-foreground);
+}
+
+.tool-call-compact--truncated-details
+    .tool-call-compact-detail-row
+    .tool-call-compact-detail-text
+    .tool-call-compact-path-link:hover,
+.tool-call-compact--truncated-details
+    .tool-call-compact-detail-row
+    .tool-call-compact-detail-text
+    .tool-call-compact-path-link:focus-visible {
+    color: var(--vscode-textLink-foreground);
 }
 
 .tool-call-compact[data-status="in_progress"] .tool-call-compact-summary-verbs,

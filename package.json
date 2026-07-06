@@ -115,11 +115,12 @@
                 "ib-acp-ui.toolCallVerbosity": {
                     "type": "string",
                     "enum": [
-                        "verbose",
-                        "compact"
+                        "minimal",
+                        "compact",
+                        "verbose"
                     ],
                     "default": "verbose",
-                    "description": "How tool calls appear in the chat trace. Verbose shows full file previews and diffs. Compact uses single-line summaries."
+                    "description": "How tool calls appear in the chat trace. Minimal groups tool calls with a summary and shows the last three details. Compact shows one line per tool call. Verbose shows full file previews and diffs."
                 },
                 "ib-acp-ui.contentWidthPercent": {
                     "type": "number",

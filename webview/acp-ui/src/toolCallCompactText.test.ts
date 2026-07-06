@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { TraceToolItem } from "./chatReducer";
 import {
+    compactGroupHiddenDetailCount,
     compactToolDetailLine,
     compactToolDetailParts,
     compactToolGroupSummary,
@@ -102,6 +103,37 @@ describe("toolCallCompactText", () => {
         );
     });
 
+    it("counts hidden grouped detail lines", () => {
+        expect(compactGroupHiddenDetailCount(14, 3)).toBe(11);
+        expect(compactGroupHiddenDetailCount(3, 3)).toBe(0);
+        expect(compactGroupHiddenDetailCount(2, 3)).toBe(0);
+    });
+
+    it("summarizes grouped reads, greps, and globs in cursor order", () => {
+        const items = [
+            toolItem({
+                toolCallId: "read-1",
+                kind: "read",
+                subtitle: "src/a.ts",
+            }),
+            toolItem({
+                toolCallId: "glob-1",
+                kind: "glob",
+                title: "Glob",
+                content: 'Globbed "**/*.ts" in .',
+            }),
+            toolItem({
+                toolCallId: "grep-1",
+                kind: "search",
+                subtitle: ".",
+                content: 'Grepped "foo" in .',
+            }),
+        ];
+        expect(compactToolGroupSummary(items)).toBe(
+            "Read, grepped, globbed 1 file, 1 grep, 1 glob",
+        );
+    });
+
     it("summarizes grouped reads and grep", () => {
         const items = [
             toolItem({
@@ -129,11 +161,11 @@ describe("toolCallCompactText", () => {
             }),
         ];
         expect(compactToolGroupSummary(items)).toBe(
-            "Grepped, read 1 grep, 3 files",
+            "Read, grepped 3 files, 1 grep",
         );
         expect(compactToolGroupSummaryParts(items)).toEqual({
-            verbs: "Grepped, read",
-            counts: "1 grep, 3 files",
+            verbs: "Read, grepped",
+            counts: "3 files, 1 grep",
         });
     });
 
