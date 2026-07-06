@@ -1,9 +1,9 @@
-# Task: Session resume (`session/load`)
+---
+status: done
+feature: docs/features/session-resume.md
+---
 
-**Status:** Done  
-**Priority:** P0  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: Session resume (`session/load`)
 
 ## Deliverable
 

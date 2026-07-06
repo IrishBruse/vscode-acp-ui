@@ -1,9 +1,9 @@
-# Task: Initialization metadata
+---
+status: not-started
+feature: docs/features/client-initialization.md
+---
 
-**Status:** Not started  
-**Priority:** P3  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: Initialization metadata
 
 ## Deliverable
 

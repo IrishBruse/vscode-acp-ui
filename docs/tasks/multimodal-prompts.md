@@ -1,9 +1,9 @@
-# Task: Multimodal prompts and structured `@` mentions
+---
+status: not-started
+feature: docs/features/multimodal-prompts.md
+---
 
-**Status:** Not started  
-**Priority:** P3  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: Multimodal prompts and structured `@` mentions
 
 ## Deliverable
 

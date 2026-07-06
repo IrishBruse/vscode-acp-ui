@@ -1,9 +1,9 @@
-# Task: Protocol v2 migration planning
+---
+status: not-started
+feature: docs/features/protocol-v2.md
+---
 
-**Status:** Not started  
-**Priority:** P3 (track only)  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: Protocol v2 migration planning
 
 ## Deliverable
 

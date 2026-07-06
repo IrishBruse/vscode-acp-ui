@@ -74,12 +74,16 @@ Do not split user and implementation into separate files.
 | Location | Purpose |
 | --- | --- |
 | `docs/features/` | Product features: user story plus implementation in one file |
-| `docs/tasks/` | Tracked work items, divergence from ACP, and backlog |
+| `docs/tasks/` | Tracked work items and backlog |
 | `docs/acp/` | Upstream ACP protocol reference (synced) |
 
 Feature docs describe what ACP UI does.
 Task docs describe what is left to do.
 ACP docs describe the protocol contract.
+
+Each task under `docs/tasks/` links back via YAML frontmatter `feature: docs/features/<slug>.md`.
+Create or update the feature doc when you add or ship a task.
+See [docs/tasks/AGENTS.md](../tasks/AGENTS.md).
 
 ## Example skeleton
 

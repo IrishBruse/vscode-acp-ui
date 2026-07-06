@@ -1,9 +1,9 @@
-# Task: Cursor extension UX
+---
+status: not-started
+feature: docs/features/cursor-extensions.md
+---
 
-**Status:** Not started  
-**Priority:** P2  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: Cursor extension UX
 
 ## Deliverable
 

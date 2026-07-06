@@ -1,9 +1,9 @@
-# Task: Session list and delete (`session/list`, `session/delete`)
+---
+status: not-started
+feature: docs/features/session-management.md
+---
 
-**Status:** Not started  
-**Priority:** P2 (list), P3 (delete)  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: Session list and delete (`session/list`, `session/delete`)
 
 ## Deliverable
 

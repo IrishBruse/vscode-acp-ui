@@ -1,9 +1,9 @@
-# Task: Client capabilities parity (Zed)
+---
+status: in-progress
+feature: docs/features/client-capabilities.md
+---
 
-**Status:** In progress  
-**Priority:** P1  
-**Owner:** unassigned  
-**Source:** Zed `crates/agent_servers/src/acp.rs` (`client_capabilities_for_agent`), Cursor ACP forum threads
+# Task: Client capabilities parity (Zed)
 
 ## Deliverable
 

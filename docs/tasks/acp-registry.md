@@ -1,8 +1,9 @@
-# Task: Implement ACP Registry in the extension
+---
+status: not-started
+feature: docs/features/acp-registry.md
+---
 
-**Status:** Not started  
-**Owner:** unassigned  
-**Extension:** `ib-acp-ui` (ACP UI)
+# Task: Implement ACP Registry in the extension
 
 ## Deliverable
 
@@ -315,4 +316,3 @@ The task is complete when all of the following are true:
 - Repo: `https://github.com/agentclientprotocol/registry`
 - Schema: `https://github.com/agentclientprotocol/registry/blob/main/agent.schema.json`
 - Spawn config: `src/acp/domain/agentSpawnConfig.ts`
-- Auth gap: `docs/ACP_DIVERGENCE_REPORT.md`

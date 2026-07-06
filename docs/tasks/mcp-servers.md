@@ -1,9 +1,9 @@
-# Task: MCP servers forwarding
+---
+status: not-started
+feature: docs/features/mcp-servers.md
+---
 
-**Status:** Not started  
-**Priority:** P1  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: MCP servers forwarding
 
 ## Deliverable
 

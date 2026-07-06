@@ -1,9 +1,9 @@
-# Task: Authentication (`authenticate` / `logout`)
+---
+status: done
+feature: docs/features/authentication.md
+---
 
-**Status:** Done  
-**Priority:** P0  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: Authentication (`authenticate` / `logout`)
 
 ## Deliverable
 

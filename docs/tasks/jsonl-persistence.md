@@ -1,9 +1,9 @@
-# Task: JSONL persistence + `historyReplay`
+---
+status: done
+feature: docs/features/session-persistence.md
+---
 
-**Status:** Done  
-**Priority:** P0  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: JSONL persistence + `historyReplay`
 
 ## Deliverable
 
@@ -41,7 +41,3 @@ The **runtime session id** (`header.runtimeSessionId`) is the agent `sessionId` 
 1. Closing and reopening a chat restores the local transcript from JSONL when `session/load` is not used.
 2. JSONL files grow during normal chat use without breaking existing sessions.
 3. `historyReplay` populates the webview trace on open (`historyReplay` is sent before `init`).
-
-## References
-
-- `docs/ACP_DIVERGENCE_REPORT.md` (Local session model vs ACP session model)

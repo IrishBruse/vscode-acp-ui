@@ -1,9 +1,9 @@
-# Task: Terminal authentication (`auth.terminal` / `_meta.terminal-auth`)
+---
+status: not-started
+feature: docs/features/terminal-authentication.md
+---
 
-**Status:** Not started  
-**Priority:** P2  
-**Owner:** unassigned  
-**Source:** Zed `crates/agent_servers/src/acp.rs` (`client_capabilities_for_agent`, `meta_terminal_auth_task`)
+# Task: Terminal authentication (`auth.terminal` / `_meta.terminal-auth`)
 
 ## Deliverable
 

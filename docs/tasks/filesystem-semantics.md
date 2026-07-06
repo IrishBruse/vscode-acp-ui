@@ -1,9 +1,9 @@
-# Task: Filesystem semantics
+---
+status: not-started
+feature: docs/features/filesystem-semantics.md
+---
 
-**Status:** Not started  
-**Priority:** P3  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: Filesystem semantics
 
 ## Deliverable
 

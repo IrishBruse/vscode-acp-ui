@@ -1,9 +1,9 @@
-# Task: SDK unstables evaluation
+---
+status: not-started
+feature: docs/features/sdk-unstables.md
+---
 
-**Status:** Not started  
-**Priority:** P3  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: SDK unstables evaluation
 
 ## Deliverable
 
@@ -41,5 +41,4 @@ Evaluate whether ACP UI should adopt additional SDK unstable APIs beyond those a
 
 ## References
 
-- `docs/ACP_DIVERGENCE_REPORT.md` (Unstable / SDK-only APIs)
 - `docs/acp/rfds/`

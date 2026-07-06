@@ -1,9 +1,9 @@
-# Task: Terminal capability (`terminal/create`)
+---
+status: not-started
+feature: docs/features/terminal.md
+---
 
-**Status:** Not started  
-**Priority:** P1  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: Terminal capability (`terminal/create`)
 
 ## Deliverable
 

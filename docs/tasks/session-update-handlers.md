@@ -1,9 +1,9 @@
-# Task: Unhandled `session/update` types
+---
+status: not-started
+feature: docs/features/session-updates.md
+---
 
-**Status:** Not started  
-**Priority:** P2  
-**Owner:** unassigned  
-**Source:** `docs/ACP_DIVERGENCE_REPORT.md`
+# Task: Unhandled `session/update` types
 
 ## Deliverable
 
