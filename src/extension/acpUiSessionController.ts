@@ -34,7 +34,9 @@ import {
     type AcpUiSessionReplayEvent,
     type AcpUiSessionSubmitEvent,
     appendSessionEvent,
+    appendSessionEvents,
     clearSessionFileLog,
+    flushPendingSessionFileWrites,
     parseSessionFile,
     shouldDeferJsonlHistoryReplay,
     shouldPersistExtensionMessage,
@@ -133,6 +135,7 @@ export class AcpUiSessionController {
     }
 
     dispose(): void {
+        void flushPendingSessionFileWrites(this.documentUri);
         this.disposeBridge();
         for (const disposable of this.disposables) {
             disposable.dispose();
@@ -277,9 +280,7 @@ export class AcpUiSessionController {
     ): Promise<void> {
         this.documentReplayDepth += 1;
         try {
-            for (const event of events) {
-                await appendSessionEvent(this.documentUri, event);
-            }
+            await appendSessionEvents(this.documentUri, events);
             this.replayedEventCount = events.length;
         } catch (err: unknown) {
             const detail = err instanceof Error ? err.message : String(err);

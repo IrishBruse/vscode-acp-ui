@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     ACP_UI_SESSION_SCHEMA,
+    createDebouncedBatchQueue,
     enqueueSessionFileWrite,
     isReplayableSessionEvent,
     parseSessionEventLines,
@@ -36,6 +37,82 @@ describe("enqueueSessionFileWrite", () => {
         releaseFirst?.();
         await Promise.all([first, second]);
         expect(order).toEqual([1, 2, 3]);
+    });
+});
+
+describe("createDebouncedBatchQueue", () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("batches appends until the debounce window elapses", async () => {
+        const flushed: string[][] = [];
+        const queue = createDebouncedBatchQueue({
+            debounceMs: 100,
+            maxBatchSize: 10,
+            onFlush: async (_key, items) => {
+                flushed.push([...items]);
+            },
+        });
+
+        const first = queue.enqueue("session-1", "a");
+        const second = queue.enqueue("session-1", "b");
+        await Promise.resolve();
+        expect(flushed).toEqual([]);
+
+        await vi.advanceTimersByTimeAsync(100);
+        await Promise.all([first, second]);
+        expect(flushed).toEqual([["a", "b"]]);
+    });
+
+    it("flushes immediately for marked appends", async () => {
+        const flushed: string[][] = [];
+        const queue = createDebouncedBatchQueue({
+            debounceMs: 100,
+            maxBatchSize: 10,
+            onFlush: async (_key, items) => {
+                flushed.push([...items]);
+            },
+        });
+
+        const first = queue.enqueue("session-1", "a");
+        const second = queue.enqueue("session-1", "b", true);
+        await Promise.all([first, second]);
+        expect(flushed).toEqual([["a", "b"]]);
+    });
+
+    it("flushes when the batch size cap is reached", async () => {
+        const flushed: string[][] = [];
+        const queue = createDebouncedBatchQueue({
+            debounceMs: 100,
+            maxBatchSize: 2,
+            onFlush: async (_key, items) => {
+                flushed.push([...items]);
+            },
+        });
+
+        const first = queue.enqueue("session-1", "a");
+        const second = queue.enqueue("session-1", "b");
+        await Promise.all([first, second]);
+        expect(flushed).toEqual([["a", "b"]]);
+    });
+
+    it("writes many blocks in one flush via enqueueMany", async () => {
+        const flushed: string[][] = [];
+        const queue = createDebouncedBatchQueue({
+            debounceMs: 100,
+            maxBatchSize: 10,
+            onFlush: async (_key, items) => {
+                flushed.push([...items]);
+            },
+        });
+
+        await queue.enqueueMany("session-1", ["a", "b", "c"], true);
+        expect(flushed).toEqual([["a", "b", "c"]]);
     });
 });
 

@@ -15,7 +15,9 @@ import {
     type AcpUiSessionHeader,
     type AcpUiSessionRecordDebug,
     type AcpUiSessionReplayEvent,
+    createDebouncedBatchQueue,
     enqueueSessionFileWrite,
+    immediateFlushSessionEventTypes,
     normalizePromptHistory,
     parseSessionFile,
     serializeSessionHeader,
@@ -29,7 +31,9 @@ export {
     type AcpUiSessionRecordDebug,
     type AcpUiSessionReplayEvent,
     type AcpUiSessionSubmitEvent,
+    createDebouncedBatchQueue,
     enqueueSessionFileWrite,
+    immediateFlushSessionEventTypes,
     isReplayableSessionEvent,
     parseSessionEventLines,
     parseSessionEventLinesFromIndex,
@@ -152,6 +156,17 @@ export async function createSessionFile(
     return { id: header.id, uri, header };
 }
 
+const sessionFileAppendDebounceMs = 150;
+const sessionFileAppendMaxBatchSize = 48;
+
+const sessionFileAppendQueue = createDebouncedBatchQueue({
+    debounceMs: sessionFileAppendDebounceMs,
+    maxBatchSize: sessionFileAppendMaxBatchSize,
+    onFlush: async (key, blocks) => {
+        await appendSessionFileBlocks(Uri.parse(key), blocks);
+    },
+});
+
 async function applySessionFileEdit(
     uri: Uri,
     apply: (edit: WorkspaceEdit, doc: TextDocument) => void,
@@ -169,12 +184,40 @@ async function applySessionFileEdit(
     });
 }
 
+async function appendSessionFileBlocks(
+    uri: Uri,
+    blocks: string[],
+): Promise<void> {
+    if (blocks.length === 0) {
+        return;
+    }
+    const combined = blocks.join("");
+    await applySessionFileEdit(
+        uri,
+        (edit, doc) => {
+            const text = doc.getText();
+            const suffix = text.length > 0 && !text.endsWith("\n") ? "\n" : "";
+            const insertPos = doc.positionAt(text.length);
+            edit.insert(uri, insertPos, `${suffix}${combined}`);
+        },
+        `Failed to append session records to ${uri.fsPath}`,
+    );
+}
+
+/**
+ * Flushes any debounced session file appends for `uri`.
+ */
+export async function flushPendingSessionFileWrites(uri: Uri): Promise<void> {
+    await sessionFileAppendQueue.flush(uri.toString());
+}
+
 /**
  * Removes all replay events and RPC records, keeping only the session header.
  */
 export async function clearSessionFileLog(
     uri: Uri,
 ): Promise<AcpUiSessionHeader | null> {
+    await flushPendingSessionFileWrites(uri);
     const doc = await workspace.openTextDocument(uri);
     const parsed = parseSessionFile(doc.getText());
     if (parsed.header === null) {
@@ -211,16 +254,30 @@ export async function appendSessionEvent(
         type: event.type,
         ...debug,
     });
-    await applySessionFileEdit(
-        uri,
-        (edit, doc) => {
-            const text = doc.getText();
-            const suffix = text.length > 0 && !text.endsWith("\n") ? "\n" : "";
-            const insertPos = doc.positionAt(text.length);
-            edit.insert(uri, insertPos, `${suffix}${block}`);
-        },
-        `Failed to append session event to ${uri.fsPath}`,
+    await sessionFileAppendQueue.enqueue(
+        uri.toString(),
+        block,
+        immediateFlushSessionEventTypes.has(event.type),
     );
+}
+
+/**
+ * Appends many replay event blocks in one batched write.
+ */
+export async function appendSessionEvents(
+    uri: Uri,
+    events: ReadonlyArray<AcpUiSessionReplayEvent>,
+): Promise<void> {
+    if (events.length === 0) {
+        return;
+    }
+    const blocks = events.map((event) =>
+        serializeSessionRecord(event, {
+            record: "event",
+            type: event.type,
+        }),
+    );
+    await sessionFileAppendQueue.enqueueMany(uri.toString(), blocks, true);
 }
 
 /**
@@ -235,16 +292,7 @@ export async function appendSessionRpcRecord(
         record: "rpc",
         ...debug,
     });
-    await applySessionFileEdit(
-        uri,
-        (edit, doc) => {
-            const text = doc.getText();
-            const suffix = text.length > 0 && !text.endsWith("\n") ? "\n" : "";
-            const insertPos = doc.positionAt(text.length);
-            edit.insert(uri, insertPos, `${suffix}${block}`);
-        },
-        `Failed to append ACP RPC record to ${uri.fsPath}`,
-    );
+    await sessionFileAppendQueue.enqueue(uri.toString(), block);
 }
 
 /**
@@ -263,6 +311,7 @@ export async function updateSessionHeader(
         >
     >,
 ): Promise<AcpUiSessionHeader | null> {
+    await flushPendingSessionFileWrites(uri);
     const doc = await workspace.openTextDocument(uri);
     const parsed = parseSessionFile(doc.getText());
     if (parsed.header === null) {
@@ -331,6 +380,7 @@ export async function updateSessionHeader(
  * Deletes a session file from disk.
  */
 export async function deleteSessionFile(uri: Uri): Promise<void> {
+    await flushPendingSessionFileWrites(uri);
     try {
         await workspace.fs.delete(uri, { useTrash: true });
     } catch {

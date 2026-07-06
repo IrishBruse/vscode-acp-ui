@@ -23,6 +23,132 @@ export function enqueueSessionFileWrite<T>(
     return next as Promise<T>;
 }
 
+type DebouncedBatchQueueState = {
+    items: string[];
+    timer: ReturnType<typeof setTimeout> | undefined;
+    waiters: Array<() => void>;
+    flushing: Promise<void> | undefined;
+};
+
+export type DebouncedBatchQueue = {
+    enqueue: (key: string, item: string, immediate?: boolean) => Promise<void>;
+    enqueueMany: (
+        key: string,
+        items: string[],
+        immediate?: boolean,
+    ) => Promise<void>;
+    flush: (key: string) => Promise<void>;
+};
+
+/**
+ * Batches string appends per key and flushes after a debounce window or size cap.
+ */
+export function createDebouncedBatchQueue(options: {
+    debounceMs: number;
+    maxBatchSize: number;
+    onFlush: (key: string, items: string[]) => Promise<void>;
+}): DebouncedBatchQueue {
+    const states = new Map<string, DebouncedBatchQueueState>();
+
+    const getState = (key: string): DebouncedBatchQueueState => {
+        let state = states.get(key);
+        if (state === undefined) {
+            state = {
+                items: [],
+                timer: undefined,
+                waiters: [],
+                flushing: undefined,
+            };
+            states.set(key, state);
+        }
+        return state;
+    };
+
+    const runFlush = async (key: string): Promise<void> => {
+        const state = states.get(key);
+        if (state === undefined || state.items.length === 0) {
+            return;
+        }
+        if (state.flushing !== undefined) {
+            await state.flushing;
+            if (state.items.length > 0) {
+                await runFlush(key);
+            }
+            return;
+        }
+
+        if (state.timer !== undefined) {
+            clearTimeout(state.timer);
+            state.timer = undefined;
+        }
+
+        const batch = state.items.splice(0);
+        const waiters = state.waiters.splice(0);
+
+        state.flushing = options
+            .onFlush(key, batch)
+            .then(() => undefined)
+            .finally(() => {
+                state.flushing = undefined;
+                for (const resolve of waiters) {
+                    resolve();
+                }
+                if (state.items.length > 0) {
+                    void runFlush(key);
+                }
+            });
+        await state.flushing;
+    };
+
+    const scheduleFlush = (key: string, immediate: boolean): void => {
+        const state = getState(key);
+        if (immediate || state.items.length >= options.maxBatchSize) {
+            void runFlush(key);
+            return;
+        }
+        if (state.timer !== undefined) {
+            clearTimeout(state.timer);
+        }
+        state.timer = setTimeout(() => {
+            state.timer = undefined;
+            void runFlush(key);
+        }, options.debounceMs);
+    };
+
+    return {
+        enqueue(key, item, immediate = false) {
+            const state = getState(key);
+            state.items.push(item);
+            return new Promise((resolve) => {
+                state.waiters.push(resolve);
+                scheduleFlush(key, immediate);
+            });
+        },
+        enqueueMany(key, items, immediate = false) {
+            if (items.length === 0) {
+                return Promise.resolve();
+            }
+            const state = getState(key);
+            state.items.push(...items);
+            return new Promise((resolve) => {
+                state.waiters.push(resolve);
+                scheduleFlush(
+                    key,
+                    immediate || items.length >= options.maxBatchSize,
+                );
+            });
+        },
+        flush: runFlush,
+    };
+}
+
+/** Event types that should flush the session append buffer immediately. */
+export const immediateFlushSessionEventTypes = new Set<string>([
+    "submit",
+    "turnComplete",
+    "sessionReset",
+]);
+
 /**
  * Debug metadata shown on the `//` comment line above each JSON block.
  */
