@@ -1,6 +1,6 @@
 ---
 status: in-progress
-feature: docs/features/client.md
+feature: docs/features/acp/client.md
 ---
 
 # Task: Client capabilities parity (Zed)

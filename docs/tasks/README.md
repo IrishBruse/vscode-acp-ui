@@ -9,22 +9,22 @@ Each task's YAML frontmatter links to a high-level feature doc under `docs/featu
 
 | Task | Feature | Status | File |
 | --- | --- | --- | --- |
-| Authentication | [authentication](../features/authentication.md) | Done | [auth.md](./auth.md) |
-| Client capabilities (Zed parity) | [client](../features/client.md) | In progress | [client-capabilities.md](./client-capabilities.md) |
-| Session resume (`session/load`) | [sessions](../features/sessions.md) | Done | [session-resume.md](./session-resume.md) |
-| JSONL persistence + `historyReplay` | [sessions](../features/sessions.md) | Done | [jsonl-persistence.md](./jsonl-persistence.md) |
-| Terminal capability | [terminal](../features/terminal.md) | Not started | [terminal.md](./terminal.md) |
-| Terminal authentication | [authentication](../features/authentication.md) | Not started | [terminal-auth.md](./terminal-auth.md) |
-| MCP servers forwarding | [mcp](../features/mcp.md) | Not started | [mcp-servers.md](./mcp-servers.md) |
-| Session list / delete | [sessions](../features/sessions.md) | Not started | [session-list-delete.md](./session-list-delete.md) |
-| `session/update` handlers | [sessions](../features/sessions.md) | Not started | [session-update-handlers.md](./session-update-handlers.md) |
-| Cursor extension UX | [cursor-extensions](../features/cursor-extensions.md) | Not started | [cursor-extension-ux.md](./cursor-extension-ux.md) |
-| Initialization metadata | [client](../features/client.md) | Not started | [initialization-metadata.md](./initialization-metadata.md) |
-| Multimodal prompts + `@` mentions | [composer](../features/composer.md) | Not started | [multimodal-prompts.md](./multimodal-prompts.md) |
-| Filesystem semantics | [filesystem](../features/filesystem.md) | Not started | [filesystem-semantics.md](./filesystem-semantics.md) |
-| SDK unstables evaluation | [platform](../features/platform.md) | Not started | [sdk-unstables.md](./sdk-unstables.md) |
-| Protocol v2 migration planning | [platform](../features/platform.md) | Not started | [protocol-v2.md](./protocol-v2.md) |
-| ACP Registry in extension | [agent-registry](../features/agent-registry.md) | Not started | [acp-registry.md](./acp-registry.md) |
+| Authentication | [authentication](../features/acp/authentication.md) | Done | [auth.md](./auth.md) |
+| Client capabilities (Zed parity) | [client](../features/acp/client.md) | In progress | [client-capabilities.md](./client-capabilities.md) |
+| Session resume (`session/load`) | [sessions](../features/acp/sessions.md) | Done | [session-resume.md](./session-resume.md) |
+| JSONL persistence + `historyReplay` | [sessions](../features/acp/sessions.md) | Done | [jsonl-persistence.md](./jsonl-persistence.md) |
+| Terminal capability | [terminal](../features/acp/terminal.md) | Not started | [terminal.md](./terminal.md) |
+| Terminal authentication | [authentication](../features/acp/authentication.md) | Not started | [terminal-auth.md](./terminal-auth.md) |
+| MCP servers forwarding | [mcp](../features/acp/mcp.md) | Not started | [mcp-servers.md](./mcp-servers.md) |
+| Session list / delete | [sessions](../features/acp/sessions.md) | Not started | [session-list-delete.md](./session-list-delete.md) |
+| `session/update` handlers | [sessions](../features/acp/sessions.md) | Not started | [session-update-handlers.md](./session-update-handlers.md) |
+| Cursor extension UX | [cursor-extensions](../features/ui/cursor-extensions.md) | Not started | [cursor-extension-ux.md](./cursor-extension-ux.md) |
+| Initialization metadata | [client](../features/acp/client.md) | Not started | [initialization-metadata.md](./initialization-metadata.md) |
+| Multimodal prompts + `@` mentions | [composer](../features/ui/composer.md) | Not started | [multimodal-prompts.md](./multimodal-prompts.md) |
+| Filesystem semantics | [filesystem](../features/acp/filesystem.md) | Not started | [filesystem-semantics.md](./filesystem-semantics.md) |
+| SDK unstables evaluation | [platform](../features/maintainer/platform.md) | Not started | [sdk-unstables.md](./sdk-unstables.md) |
+| Protocol v2 migration planning | [platform](../features/maintainer/platform.md) | Not started | [protocol-v2.md](./protocol-v2.md) |
+| ACP Registry in extension | [agent-registry](../features/acp/agent-registry.md) | Not started | [acp-registry.md](./acp-registry.md) |
 
 ## Suggested implementation order
 

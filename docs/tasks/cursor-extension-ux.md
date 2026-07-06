@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/cursor-extensions.md
+feature: docs/features/ui/cursor-extensions.md
 ---
 
 # Task: Cursor extension UX

@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/sessions.md
+feature: docs/features/acp/sessions.md
 ---
 
 # Task: Session list and delete (`session/list`, `session/delete`)

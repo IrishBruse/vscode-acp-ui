@@ -17,8 +17,8 @@ Breaking v2 deltas (auth/login, session/resume, batch rules, prompt lifecycle) a
 
 Implementation stays out of scope until an SDK bump.
 
-Task: [protocol-v2](../tasks/protocol-v2.md).
-Protocol: [v2 overview](../acp/protocol/v2/overview.mdx).
+Task: [protocol-v2](../../tasks/protocol-v2.md).
+Protocol: [v2 overview](../../acp/protocol/v2/overview.mdx).
 
 ### SDK unstables
 
@@ -29,4 +29,4 @@ Candidates under review: `unstable_resumeSession`, `unstable_forkSession`, NES, 
 Decisions are written in the task as adopt, defer, or reject.
 Adopted APIs surface in the relevant product feature doc.
 
-Task: [sdk-unstables](../tasks/sdk-unstables.md).
+Task: [sdk-unstables](../../tasks/sdk-unstables.md).

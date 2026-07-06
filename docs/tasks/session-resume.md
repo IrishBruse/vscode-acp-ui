@@ -1,6 +1,6 @@
 ---
 status: done
-feature: docs/features/sessions.md
+feature: docs/features/acp/sessions.md
 ---
 
 # Task: Session resume (`session/load`)

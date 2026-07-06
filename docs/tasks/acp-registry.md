@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/agent-registry.md
+feature: docs/features/acp/agent-registry.md
 ---
 
 # Task: Implement ACP Registry in the extension

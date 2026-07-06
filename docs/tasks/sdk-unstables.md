@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/platform.md
+feature: docs/features/maintainer/platform.md
 ---
 
 # Task: SDK unstables evaluation

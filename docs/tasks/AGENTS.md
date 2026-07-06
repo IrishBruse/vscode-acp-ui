@@ -19,7 +19,7 @@ Every `docs/tasks/<task-slug>.md` file starts with YAML frontmatter:
 ```yaml
 ---
 status: not-started   # done | in-progress | not-started
-feature: docs/features/<feature-slug>.md
+feature: docs/features/<group>/<feature-slug>.md
 ---
 ```
 
@@ -29,13 +29,13 @@ Path to the feature doc under `docs/features/`.
 Features are **combined high-level areas** (for example `sessions.md`, `composer.md`).
 Several tasks may share the same `feature` path.
 
-Create or extend `docs/features/<feature-slug>.md` when you add a task if no suitable feature exists yet.
+Create or extend `docs/features/<group>/<feature-slug>.md` when you add a task if no suitable feature exists yet.
 Follow [docs/features/AGENTS.md](../features/AGENTS.md) for feature doc structure.
 
 When the task ships, update the linked feature doc (`## User facing` and the matching `## Implementation` subsection).
 Do not duplicate long implementation detail in the task body after the feature doc is complete.
 
-Planning-only tasks with no product surface may omit `feature` or link to [platform](../features/platform.md).
+Planning-only tasks with no product surface may omit `feature` or link to [platform](../features/maintainer/platform.md).
 
 ## Body sections
 

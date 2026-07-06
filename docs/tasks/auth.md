@@ -1,6 +1,6 @@
 ---
 status: done
-feature: docs/features/authentication.md
+feature: docs/features/acp/authentication.md
 ---
 
 # Task: Authentication (`authenticate` / `logout`)

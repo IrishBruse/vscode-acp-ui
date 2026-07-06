@@ -8,18 +8,27 @@ Each file describes a **combined high-level feature**, not a single task.
 ```
 docs/features/
   AGENTS.md                 # this file — the pattern for feature docs
-  <feature-slug>.md         # one file per high-level feature (kebab-case filename)
+  acp/                      # Agent Client Protocol client surfaces
+    sessions.md
+    client.md
+    ...
+  ui/                       # chat webview and composer surfaces
+    composer.md
+    cursor-extensions.md
+  maintainer/               # protocol/SDK evolution (no end-user surface)
+    platform.md
+  <group>/<feature-slug>.md # one file per high-level feature (kebab-case filename)
 ```
 
+Group features by product area.
 Use a kebab-case slug for the filename (for example `sessions.md`, `composer.md`).
-Do not nest feature content in subdirectories.
 
 Several tasks may link to the same feature doc.
 Group related work under one feature instead of creating a 1:1 task-to-feature mapping.
 
 ## Document structure
 
-Every `docs/features/<feature-slug>.md` file uses the same section order:
+Every `docs/features/<group>/<feature-slug>.md` file uses the same section order:
 
 1. **`# Feature name`** — human-readable title at the top.
    Use title case or sentence case.
@@ -44,25 +53,25 @@ Keep implementation detail under `## Implementation` only.
 Do not list bare `` `path/file.ts` `` or `` `methodName` `` references.
 Link to the exact file and line range instead.
 
-Use relative markdown links from `docs/features/` (two levels up to the repo root):
+Use relative markdown links from `docs/features/<group>/` (three levels up to the repo root):
 
 ```markdown
-[buildComposerAutocompleteState](../../webview/acp-ui/src/components/composerAutocomplete.ts#L85-L124)
+[buildComposerAutocompleteState](../../../webview/acp-ui/src/components/composerAutocomplete.ts#L85-L124)
 ```
 
 Rules:
 
 - **Link text** — symbol name, type name, or a short label (not the full path).
-- **Target** — `../../<path-from-repo-root>#L<start>-L<end>` for a range, or `#L<line>` for one line.
+- **Target** — `../../../<path-from-repo-root>#L<start>-L<end>` for a range, or `#L<line>` for one line.
 - **Ranges** — span the function, case arm, or block you are describing.
   Re-check line numbers when the linked code moves.
-- **Protocol docs** — link under `../acp/...` the same way (no line anchor when the synced doc has no stable lines).
+- **Protocol docs** — link under `../../acp/...` the same way (no line anchor when the synced doc has no stable lines).
 
 Example implementation paragraph:
 
 ```markdown
-[buildComposerAutocompleteState](../../webview/acp-ui/src/components/composerAutocomplete.ts#L85-L124)
-calls [queryFromCaret](../../webview/acp-ui/src/components/composerAutocomplete.ts#L33-L43)
+[buildComposerAutocompleteState](../../../webview/acp-ui/src/components/composerAutocomplete.ts#L85-L124)
+calls [queryFromCaret](../../../webview/acp-ui/src/components/composerAutocomplete.ts#L33-L43)
 to detect `/` and `@` tokens at the caret.
 ```
 
@@ -75,6 +84,7 @@ Add or extend a feature doc when a user-visible or session-behavior surface ship
 Prefer updating an existing high-level feature over adding a new file for every task.
 
 Add a new feature file only when the work is a distinct product area that does not fit an existing doc.
+Pick the group folder that matches the surface (`acp`, `ui`, or `maintainer`).
 
 Do not split user and implementation into separate files.
 
@@ -90,7 +100,7 @@ Feature docs describe what ACP UI does at a high level.
 Task docs describe specific deliverables and checklists.
 ACP docs describe the protocol contract.
 
-Each task under `docs/tasks/` links back via YAML frontmatter `feature: docs/features/<slug>.md`.
+Each task under `docs/tasks/` links back via YAML frontmatter `feature: docs/features/<group>/<slug>.md`.
 Create or update the feature doc when you add or ship a task.
 See [docs/tasks/AGENTS.md](../tasks/AGENTS.md).
 
@@ -107,11 +117,11 @@ Short explanation of what the user gets across related tasks.
 
 ### Area one
 
-[myHandler](../../src/myHandler.ts#L10-L40) does the work.
-Task: [my-task](../tasks/my-task.md).
+[myHandler](../../../src/myHandler.ts#L10-L40) does the work.
+Task: [my-task](../../tasks/my-task.md).
 
 ### Area two
 
 Planned behavior and protocol links.
-Task: [other-task](../tasks/other-task.md).
+Task: [other-task](../../tasks/other-task.md).
 ```

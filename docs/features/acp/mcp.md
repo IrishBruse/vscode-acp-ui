@@ -14,5 +14,5 @@ Not implemented.
 The task covers reading `.cursor/mcp.json` (and optional settings override).
 It maps to the ACP `mcpServers` shape and passes the list on `session/new` and `session/load`.
 
-Task: [mcp-servers](../tasks/mcp-servers.md).
-Protocol: [session setup](../acp/protocol/v1/session-setup.mdx), [MCP over ACP](../acp/rfds/mcp-over-acp.mdx).
+Task: [mcp-servers](../../tasks/mcp-servers.md).
+Protocol: [session setup](../../acp/protocol/v1/session-setup.mdx), [MCP over ACP](../../acp/rfds/mcp-over-acp.mdx).

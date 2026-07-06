@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/authentication.md
+feature: docs/features/acp/authentication.md
 ---
 
 # Task: Terminal authentication (`auth.terminal` / `_meta.terminal-auth`)

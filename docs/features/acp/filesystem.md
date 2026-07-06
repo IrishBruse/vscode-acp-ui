@@ -9,10 +9,10 @@ Today reads use on-disk content only and ignore line/limit.
 
 ## Implementation
 
-[handleReadTextFile](../../src/acp/infrastructure/acpAgentProcess.ts) implements read callbacks.
-[handleWriteTextFile](../../src/acp/infrastructure/acpAgentProcess.ts) implements write callbacks.
+[handleReadTextFile](../../../src/acp/infrastructure/acpAgentProcess.ts) implements read callbacks.
+[handleWriteTextFile](../../../src/acp/infrastructure/acpAgentProcess.ts) implements write callbacks.
 Gaps include open document buffers and `line`/`limit` params.
 ENOENT returns empty string as a Gemini CLI workaround.
 
-Task: [filesystem-semantics](../tasks/filesystem-semantics.md).
-Protocol: [file system](../acp/protocol/v1/file-system.mdx).
+Task: [filesystem-semantics](../../tasks/filesystem-semantics.md).
+Protocol: [file system](../../acp/protocol/v1/file-system.mdx).

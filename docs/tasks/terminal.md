@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/terminal.md
+feature: docs/features/acp/terminal.md
 ---
 
 # Task: Terminal capability (`terminal/create`)

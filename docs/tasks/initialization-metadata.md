@@ -1,6 +1,6 @@
 ---
 status: not-started
-feature: docs/features/client.md
+feature: docs/features/acp/client.md
 ---
 
 # Task: Initialization metadata

@@ -16,5 +16,5 @@ Not implemented.
 No code under `src/acp/registry/` yet.
 The task defines fetch/cache, npx/uvx resolution, global storage install map, merged agent list API, commands, and webview agent picker.
 
-Task: [acp-registry](../tasks/acp-registry.md).
-Protocol: [ACP agent registry](../acp/rfds/acp-agent-registry.mdx), [get started registry](../acp/get-started/registry.mdx).
+Task: [acp-registry](../../tasks/acp-registry.md).
+Protocol: [ACP agent registry](../../acp/rfds/acp-agent-registry.mdx), [get started registry](../../acp/get-started/registry.mdx).
