@@ -6,6 +6,16 @@
     min-width: 0;
 }
 
+.composer-config-field--inline {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+}
+
+.composer-config-field--inline .composer-config-select {
+    max-width: 6.5rem;
+}
+
 .composer-config-label {
     font-size: 9px;
     line-height: 1;
@@ -36,18 +46,21 @@
     max-width: 10rem;
 }
 
-.composer-footer-config {
+.composer-footer-config,
+.composer-footer-model--stacked {
     align-items: flex-end;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: thin;
 }
 
-.composer-footer-config::-webkit-scrollbar {
+.composer-footer-config::-webkit-scrollbar,
+.composer-footer-model--stacked::-webkit-scrollbar {
     height: 4px;
 }
 
-.composer-footer-config::-webkit-scrollbar-thumb {
+.composer-footer-config::-webkit-scrollbar-thumb,
+.composer-footer-model--stacked::-webkit-scrollbar-thumb {
     background: var(
         --vscode-scrollbarSlider-background,
         var(--vscode-widget-border)

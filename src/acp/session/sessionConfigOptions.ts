@@ -602,8 +602,9 @@ export function cycleSessionModePick(
 }
 
 /**
- * True when the agent advertises separate config options (mode, model_config, etc.)
- * instead of encoding all tuning in bracketed model ids. Matches Zed's layout.
+ * True when the agent advertises separate toolbar config options (`model_config`,
+ * `thought_level`, etc.) instead of encoding tuning in bracketed model ids.
+ * Session `mode` is excluded; it is rendered by {@link SessionModeIndicator}.
  */
 export function usesAgentOrderedConfigLayout(
     state: AcpUiSessionConfigState | null,
@@ -611,11 +612,18 @@ export function usesAgentOrderedConfigLayout(
     if (state === null || state.options.length === 0) {
         return false;
     }
-    const hasNonModelCategory = state.options.some(
-        (option) =>
-            option.category !== undefined && option.category !== "model",
-    );
-    if (hasNonModelCategory) {
+    const hasToolbarConfigCategory = state.options.some((option) => {
+        const category = option.category;
+        if (
+            category === undefined ||
+            category === "model" ||
+            category === "mode"
+        ) {
+            return false;
+        }
+        return true;
+    });
+    if (hasToolbarConfigCategory) {
         return true;
     }
     const modelOption = modelConfigOption(state);

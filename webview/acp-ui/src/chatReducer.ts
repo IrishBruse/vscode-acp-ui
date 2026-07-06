@@ -93,6 +93,8 @@ export type ChatState = {
      * After the first real user message, model + agent pickers are read-only (standalone pre-flight).
      */
     composerPicksLocked: boolean;
+    /** When true, hide model/config controls in the composer footer. */
+    hideComposerModelControls: boolean;
 };
 
 export type ChatAction =
@@ -197,6 +199,7 @@ export function createInitialChatState(): ChatState {
         createPlanPrompt: null,
         lockSessionAgent: false,
         composerPicksLocked: false,
+        hideComposerModelControls: false,
     };
 }
 
@@ -209,6 +212,7 @@ export function createChatStateFromInit(payload: InitPayload): ChatState {
         acpAgentSelection: buildAcpAgentSelectionFromInit(payload),
         lockSessionAgent: payload.lockSessionAgent === true,
         composerPicksLocked: false,
+        hideComposerModelControls: payload.hideComposerModelControls === true,
     };
     if (
         payload.sessionConfigOptionsSeed !== undefined &&
@@ -222,7 +226,10 @@ export function createChatStateFromInit(payload: InitPayload): ChatState {
     return {
         ...base,
         modelSelection: payload.sessionModels ?? null,
-        sessionConfigLoading: !hasBootstrapModels,
+        sessionConfigLoading:
+            payload.hideComposerModelControls === true
+                ? false
+                : !hasBootstrapModels,
     };
 }
 

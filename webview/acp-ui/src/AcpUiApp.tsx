@@ -677,6 +677,7 @@ export function AcpUiApp({
             sessionConfigOptions={state.sessionConfigOptions}
             sessionConfigLoading={state.sessionConfigLoading}
             modelPickerLocked={state.composerPicksLocked}
+            hideComposerModelControls={state.hideComposerModelControls}
             promptInFlight={state.promptInFlight}
             inputBlocked={
               state.permissionPrompt !== null ||

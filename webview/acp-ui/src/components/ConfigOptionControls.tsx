@@ -6,10 +6,13 @@ export type ConfigOptionControlsProps = {
     options: AcpUiSessionConfigOption[];
     disabled: boolean;
     onPick: (configId: string, value: string | boolean) => void;
+    /** Stacked labels match Zed-style toolbars; inline matches the composer model row. */
+    layout?: "stacked" | "inline";
 };
 
 export type ComposerConfigLoadingProps = {
     label?: string;
+    layout?: "stacked" | "inline";
 };
 
 function booleanSelectValue(currentValue: boolean): string {
@@ -25,11 +28,25 @@ function configFieldId(configId: string): string {
  */
 export function ComposerConfigLoading({
     label = "Model",
+    layout = "stacked",
 }: ComposerConfigLoadingProps): ReactElement {
     const fieldId = "acp-ui-config-loading";
     return (
-        <div className="composer-config-field">
-            <label className="composer-config-label" htmlFor={fieldId}>
+        <div
+            className={
+                layout === "inline"
+                    ? "composer-config-field composer-config-field--inline"
+                    : "composer-config-field"
+            }
+        >
+            <label
+                className={
+                    layout === "inline"
+                        ? "composer-inline-label"
+                        : "composer-config-label"
+                }
+                htmlFor={fieldId}
+            >
                 {label}
             </label>
             <select
@@ -53,10 +70,20 @@ export function ConfigOptionControls({
     options,
     disabled,
     onPick,
+    layout = "stacked",
 }: ConfigOptionControlsProps): ReactElement | null {
     if (options.length === 0) {
         return null;
     }
+
+    const fieldClassName =
+        layout === "inline"
+            ? "composer-config-field composer-config-field--inline"
+            : "composer-config-field";
+    const labelClassName =
+        layout === "inline"
+            ? "composer-inline-label"
+            : "composer-config-label";
 
     return (
         <>
@@ -64,12 +91,9 @@ export function ConfigOptionControls({
                 const fieldId = configFieldId(option.configId);
                 if (option.type === "boolean") {
                     return (
-                        <div
-                            key={option.configId}
-                            className="composer-config-field"
-                        >
+                        <div key={option.configId} className={fieldClassName}>
                             <label
-                                className="composer-config-label"
+                                className={labelClassName}
                                 htmlFor={fieldId}
                                 title={option.description ?? option.name}
                             >
@@ -96,12 +120,9 @@ export function ConfigOptionControls({
                     );
                 }
                 return (
-                    <div
-                        key={option.configId}
-                        className="composer-config-field"
-                    >
+                    <div key={option.configId} className={fieldClassName}>
                         <label
-                            className="composer-config-label"
+                            className={labelClassName}
                             htmlFor={fieldId}
                             title={option.description ?? option.name}
                         >

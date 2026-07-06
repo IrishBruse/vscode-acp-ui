@@ -84,6 +84,31 @@ describe("usesAgentOrderedConfigLayout", () => {
         expect(usesAgentOrderedConfigLayout(state)).toBe(true);
     });
 
+    it("returns false for mode plus bracket-encoded model without model_config", () => {
+        const state = sessionConfigOptionsFromAgent([
+            {
+                id: "mode",
+                name: "Mode",
+                category: "mode",
+                type: "select",
+                currentValue: "agent",
+                options: [{ value: "agent", name: "Agent" }],
+            },
+            {
+                id: "model",
+                name: "Model",
+                category: "model",
+                type: "select",
+                currentValue: "composer-2[fast=true]",
+                options: [
+                    { value: "composer-2[]", name: "composer-2" },
+                    { value: "composer-2[fast=true]", name: "composer-2" },
+                ],
+            },
+        ]);
+        expect(usesAgentOrderedConfigLayout(state)).toBe(false);
+    });
+
     it("returns false for bracket-encoded model variants without other categories", () => {
         const state = sessionConfigOptionsFromAgent([
             {

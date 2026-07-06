@@ -4,25 +4,27 @@ VS Code extension that brings an **ACP UI** panel to the [Agent Client Protocol 
 
 Open **ACP UI** from the activity bar to get a dedicated chat surface next to your code: the **Chats** view lists sessions, and the webview shows the running conversation with the same UI in an editor tab or side panel.
 
-![ACP UI with sidebar sessions and main conversation](docs/Response.png)
+![ACP UI conversation panel](docs/Fullscreen.png)
 
-*Activity bar entry, Chats sidebar, and ACP UI webview in one layout.*
+*Streaming markdown, tool calls, thoughts, and plans in the ACP UI trace.*
 
 ## Features
 
-- **ACP UI** webview: ACP-backed chat in an editor tab or panel (see above). The composer and quick actions live along the bottom of the panel:
+- **ACP UI** webview: ACP-backed chat in an editor tab or panel.
+  Theme-aware markdown with colored headings and syntax-highlighted fenced code:
 
-  ![ACP UI panel with conversation and composer](docs/Fullscreen.png)
+  ![ACP UI markdown rendering](docs/Markdown.png)
 
-  *Full panel: messages, prompt field, attachments, and controls.*
+- **Tool calls** inline in the trace: read output, terminal runs, and file diffs:
+
+  ![ACP UI tool call with diff](docs/Tool-call.png)
+
+- **Agent plans** rendered as structured plan blocks:
+
+  ![ACP UI plan block](docs/Plan.png)
 
 - **Chats** sidebar under the **ACP UI** activity bar: list sessions, open, refresh, delete.
-- **Agent picker**: choose which configured agent backs the current chat (agents come from `ib-acp-ui.agents`):
-
-  ![Agent picker](docs/Agent%20Picker.png)
-
-  *Selecting among configured agents in the chat UI.*
-
+- **Session config** in the composer when the agent advertises model and tuning options.
 - **ACP UI RPC** output channel for debugging protocol traffic.
 - **Agent configuration** via `ib-acp-ui.agents` in settings (command, args, env per agent).
 
@@ -90,6 +92,21 @@ npm run verify     # build + check + test + lint
 ```
 
 For a browser-only UI loop without VS Code, use `npm run dev:standalone` (see `standalone/`).
+Preview mock chats without a live agent:
+
+```bash
+npm run dev:standalone:demo
+```
+
+Then open http://localhost:5173.
+The demo loads `standalone/fixtures/chats/showcase.ndjson` automatically.
+Send `fixture-markdown`, `fixture-tools`, or `fixture-plan` in the composer to replay other samples.
+
+Regenerate fixtures and README screenshots:
+
+```bash
+npm run screenshots
+```
 
 Publishing is automated when `package.json` **version** changes on `main` (see `.github/workflows/publish.yml`).
 
@@ -109,10 +126,11 @@ Publishing is automated when `package.json` **version** changes on `main` (see `
 | [`src/protocol/`](src/protocol/) | Messages between extension host and webview. |
 | [`webview/acp-ui/`](webview/acp-ui/) | React + Vite webview UI (chat UI, markdown, state). |
 | [`standalone/`](standalone/) | Local dev server and mocks for the webview without the extension host. |
+| [`standalone/fixtures/chats/`](standalone/fixtures/chats/) | Committed mock chat replays for demo and screenshots. |
 | [`specs/`](specs/) | Design notes for features and commands. |
 | [`media/`](media/) | Activity bar and view icons. |
 
-For standalone model seeding from captured ACP logs, see [`src/acp/session/readmeSessionModels.ts`](src/acp/session/readmeSessionModels.ts) and `standalone/mock/readme.ndjson`.
+Mock chat fixtures are built by `scripts/build-showcase-fixtures.ts` and replayed through the standalone WebSocket bridge.
 
 ## License
 

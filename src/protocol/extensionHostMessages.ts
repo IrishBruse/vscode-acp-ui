@@ -116,6 +116,8 @@ export type ExtensionToWebviewMessage =
           lockSessionAgent?: boolean;
           /** Cached config options applied on mount before the agent connects. */
           sessionConfigOptionsSeed?: AcpUiSessionConfigOption[];
+          /** Hides composer model/config controls (standalone demo and screenshots). */
+          hideComposerModelControls?: boolean;
       }
     | {
           /** Markdown heading and inline-code colors derived from the active theme. */
