@@ -90,17 +90,54 @@ describe("toolCallCompactText", () => {
         );
     });
 
+    it("avoids repeating generic read titles when path is unknown", () => {
+        const item = toolItem({
+            toolCallId: "read-sparse",
+            kind: "read",
+            title: "Read File",
+        });
+        expect(compactToolDetailLine(item)).toBe("Read");
+    });
+
     it("formats grep tools with pattern and path", () => {
         const item = toolItem({
             toolCallId: "grep-1",
             kind: "search",
             title: "Grep",
             subtitle: "webview/acp-ui/src/chatReducer.test.ts",
-            content: 'Grepped "createChatStateFromInit" in webview/acp-ui/src/chatReducer.test.ts',
+            content:
+                'Grepped "createChatStateFromInit" in webview/acp-ui/src/chatReducer.test.ts',
         });
         expect(compactToolDetailLine(item)).toBe(
             'Grepped "createChatStateFromInit" in chatReducer.test.ts',
         );
+    });
+
+    it("shows match counts for sparse Cursor-style grep tools", () => {
+        const item = toolItem({
+            toolCallId: "grep-sparse",
+            kind: "search",
+            title: "grep",
+            subtitle: "2 matches",
+            content: "2 match(es), complete",
+        });
+        expect(compactToolDetailLine(item)).toBe("Grepped 2 matches");
+    });
+
+    it("previews long terminal output with a hidden-line hint and last line", () => {
+        const lines = Array.from({ length: 24 }, (_, index) => `line ${index}`);
+        lines[23] = "✓ built in 132ms";
+        const item = toolItem({
+            toolCallId: "run-1",
+            kind: "execute",
+            subtitle: "npm run build:webview",
+            content: `$ npm run build:webview\n${lines.join("\n")}`,
+        });
+        expect(executeOutputPreview(item, false)).toEqual({
+            previewLines: ["✓ built in 132ms"],
+            hiddenLineCount: 23,
+            totalLineCount: 24,
+        });
     });
 
     it("counts hidden grouped detail lines", () => {
@@ -235,21 +272,5 @@ describe("toolCallCompactText", () => {
                 toolItem({ toolCallId: "read-1", kind: "read" }),
             ),
         ).toBe(true);
-    });
-
-    it("previews long terminal output with a hidden-line hint and last line", () => {
-        const lines = Array.from({ length: 24 }, (_, index) => `line ${index}`);
-        lines[23] = "✓ built in 132ms";
-        const item = toolItem({
-            toolCallId: "run-1",
-            kind: "execute",
-            subtitle: "npm run build:webview",
-            content: `$ npm run build:webview\n${lines.join("\n")}`,
-        });
-        expect(executeOutputPreview(item, false)).toEqual({
-            previewLines: ["✓ built in 132ms"],
-            hiddenLineCount: 23,
-            totalLineCount: 24,
-        });
     });
 });

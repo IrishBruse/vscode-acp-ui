@@ -147,6 +147,58 @@ function grepPatternFromText(text: string): string | null {
     return null;
 }
 
+function isSearchStatsLabel(text: string): boolean {
+    return /^\d+\s+(match|matches|file|files|result|results)$/i.test(
+        text.trim(),
+    );
+}
+
+function searchStatsDetailFromText(text: string): string | null {
+    const trimmed = text.trim();
+    if (isSearchStatsLabel(trimmed)) {
+        return trimmed;
+    }
+    const matchCount = trimmed.match(/^(\d+)\s+match(?:\(es\))?/i);
+    if (matchCount?.[1] !== undefined) {
+        const count = Number(matchCount[1]);
+        return count === 1 ? "1 match" : `${count} matches`;
+    }
+    const fileCount = trimmed.match(/^(\d+)\s+file(?:\(s\))?/i);
+    if (fileCount?.[1] !== undefined) {
+        const count = Number(fileCount[1]);
+        return count === 1 ? "1 file" : `${count} files`;
+    }
+    const resultCount = trimmed.match(/^(\d+)\s+result(?:\(s\))?/i);
+    if (resultCount?.[1] !== undefined) {
+        const count = Number(resultCount[1]);
+        return count === 1 ? "1 result" : `${count} results`;
+    }
+    return null;
+}
+
+function isGenericToolDetailTitle(title: string, kind: string): boolean {
+    const normalized = title.trim().toLowerCase();
+    if (normalized.length === 0 || normalized === "tool") {
+        return true;
+    }
+    if (kind === "read") {
+        return normalized === "read" || normalized === "read file";
+    }
+    if (kind === "search" || kind === "grep") {
+        return (
+            normalized === "find" ||
+            normalized === "grep" ||
+            normalized === "search" ||
+            normalized === "semanticsearch" ||
+            normalized === "semantic search"
+        );
+    }
+    if (kind === "glob") {
+        return normalized === "glob" || normalized === "glob file search";
+    }
+    return false;
+}
+
 function isGlobTool(item: TraceToolItem): boolean {
     const kind = normalizedKind(item);
     if (kind === "glob") {
@@ -176,7 +228,7 @@ function grepPathFromItem(item: TraceToolItem): string {
     if (inMatch?.[1] !== undefined && inMatch[1].length > 0) {
         return inMatch[1];
     }
-    if (subtitle.length > 0) {
+    if (subtitle.length > 0 && !isSearchStatsLabel(subtitle)) {
         return pathWithoutLineRange(subtitle);
     }
     return "";
@@ -308,9 +360,10 @@ export function compactToolDetailParts(
 
     if (kind === "read") {
         const rawPath =
-            subtitle.length > 0
-                ? pathWithoutLineRange(subtitle)
-                : item.title.trim();
+            subtitle.length > 0 ? pathWithoutLineRange(subtitle) : "";
+        if (rawPath.length === 0) {
+            return { verb: "Read", detail: "" };
+        }
         const lineRange = readLineRangeSuffix(item);
         const suffix =
             lineRange !== null && lineRange.length > 0 ? ` ${lineRange}` : "";
@@ -365,6 +418,12 @@ export function compactToolDetailParts(
                 ...pathSegmentFromRaw(path, { openTarget: "auto" }),
             };
         }
+        const stats =
+            searchStatsDetailFromText(subtitle) ??
+            searchStatsDetailFromText(item.content ?? "");
+        if (stats !== null) {
+            return { verb: "Grepped", detail: stats };
+        }
         return { verb: "Grepped", detail: "" };
     }
 
@@ -385,6 +444,12 @@ export function compactToolDetailParts(
             verb: title.length > 0 ? title : "Tool",
             ...pathSegmentFromRaw(subtitle),
         };
+    }
+    if (
+        title.length > 0 &&
+        !isGenericToolDetailTitle(title, kind.length > 0 ? kind : "")
+    ) {
+        return { verb: title, detail: "" };
     }
     return { verb: title.length > 0 ? title : "Tool", detail: "" };
 }

@@ -81,6 +81,8 @@ export class AcpSessionBridge {
     private lastModelSelection: AcpUiSessionModelSelection | null = null;
     private lastConfigOptions: AcpUiSessionConfigState | null = null;
     private toolCallKindTracking = createToolCallKindTracking();
+    /** Read tool calls awaiting `fs/readTextFile` path correlation (FIFO). */
+    private readToolCallQueue: string[] = [];
     private nextPermissionRequestId = 0;
     private permissionWaiters = new Map<
         string,
@@ -112,6 +114,7 @@ export class AcpSessionBridge {
             hostFilesystem: host.hostFilesystem,
             rpcNdjsonSink: host.rpcNdjsonSink,
             getWorkspaceRoot: host.getWorkspaceRoot,
+            onHostFilesystemRead: (path) => this.handleHostFilesystemRead(path),
             onProcessExit: () => this.handleAgentProcessExit(),
         });
         this.agentProcess.onSessionUpdate((params) =>
@@ -859,6 +862,7 @@ export class AcpSessionBridge {
             return;
         }
         this.toolCallKindTracking = createToolCallKindTracking();
+        this.readToolCallQueue = [];
         this.prompting = true;
         try {
             const result = await this.agentProcess.prompt(
@@ -985,6 +989,7 @@ export class AcpSessionBridge {
         if (params.update.sessionUpdate === "config_option_update") {
             this.syncConfigOptionsFromAgent(params.update.configOptions);
         }
+        this.trackReadToolCallForFilesystemCorrelation(params.update);
         const messages = sessionUpdateToWebviewMessages(
             params.update,
             this.toolCallKindTracking,
@@ -992,6 +997,50 @@ export class AcpSessionBridge {
         for (const msg of messages) {
             this.postToWebview(msg);
         }
+    }
+
+    private trackReadToolCallForFilesystemCorrelation(
+        update: acp.SessionUpdate,
+    ): void {
+        if (update.sessionUpdate === "tool_call") {
+            if (update.kind === "read") {
+                this.readToolCallQueue.push(update.toolCallId);
+            }
+            return;
+        }
+        if (update.sessionUpdate !== "tool_call_update") {
+            return;
+        }
+        const status = update.status;
+        if (status !== "completed" && status !== "failed") {
+            return;
+        }
+        const kind =
+            update.kind ??
+            this.toolCallKindTracking.kindByToolId.get(update.toolCallId);
+        if (kind !== "read") {
+            return;
+        }
+        this.readToolCallQueue = this.readToolCallQueue.filter(
+            (id) => id !== update.toolCallId,
+        );
+    }
+
+    private handleHostFilesystemRead(path: string): void {
+        const trimmed = path.trim();
+        if (trimmed.length === 0) {
+            return;
+        }
+        const toolCallId = this.readToolCallQueue[0];
+        if (toolCallId === undefined) {
+            return;
+        }
+        this.postToWebview({
+            type: "updateToolCall",
+            toolCallId,
+            status: "in_progress",
+            subtitle: trimmed,
+        });
     }
 }
 

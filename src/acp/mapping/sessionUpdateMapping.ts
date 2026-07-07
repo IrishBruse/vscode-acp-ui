@@ -430,6 +430,46 @@ export function createToolCallKindTracking(): ToolCallKindTracking {
 /**
  * Derives a subtitle for the tool row when a `tool_call_update` adds paths the initial `tool_call` omitted (common with Cursor CLI: empty `rawInput` on pending).
  */
+function searchSubtitleFromRawInput(
+    raw: unknown,
+    update: acp.ToolCallUpdate,
+    pendingKind: string | undefined,
+): string | undefined {
+    const pattern =
+        patternHintFromStructuredUnknown(raw) ??
+        patternHintFromPlainObject(raw);
+    const pathHint = pathHintFromStructuredUnknown(raw);
+    if (pattern !== undefined && pathHint !== undefined) {
+        return `"${pattern}" in ${pathHint}`;
+    }
+    if (pattern !== undefined) {
+        return `"${pattern}"`;
+    }
+    if (pathHint !== undefined) {
+        return formatSubtitlePathForKind(pathHint, update, pendingKind);
+    }
+    return undefined;
+}
+
+function patternHintFromStructuredUnknown(raw: unknown): string | undefined {
+    const direct = patternHintFromPlainObject(raw);
+    if (direct !== undefined) {
+        return direct;
+    }
+    if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
+        const record = raw as Record<string, unknown>;
+        const nested = record._meta;
+        if (
+            nested !== null &&
+            typeof nested === "object" &&
+            !Array.isArray(nested)
+        ) {
+            return patternHintFromPlainObject(nested);
+        }
+    }
+    return undefined;
+}
+
 export function toolCallUpdateSubtitleHint(
     update: acp.ToolCallUpdate,
     options?: { pendingKind?: string },
@@ -459,10 +499,26 @@ export function toolCallUpdateSubtitleHint(
             }
         }
     }
+    const fromRawInputSearch = searchSubtitleFromRawInput(
+        update.rawInput,
+        update,
+        options?.pendingKind,
+    );
+    if (fromRawInputSearch !== undefined) {
+        return fromRawInputSearch;
+    }
     const fromRawOutputPath = pathHintFromStructuredUnknown(update.rawOutput);
     if (fromRawOutputPath !== undefined) {
         return formatSubtitlePathForKind(
             fromRawOutputPath,
+            update,
+            options?.pendingKind,
+        );
+    }
+    const fromRawOutputError = pathHintFromErrorField(update.rawOutput);
+    if (fromRawOutputError !== undefined) {
+        return formatSubtitlePathForKind(
+            fromRawOutputError,
             update,
             options?.pendingKind,
         );
@@ -484,6 +540,12 @@ export function toolCallUpdateSubtitleHint(
                 update,
                 options?.pendingKind,
             );
+        }
+    }
+    if (kind === "search" || kind === "grep" || kind === "glob") {
+        const stats = searchStatsSubtitleFromRawOutput(update.rawOutput);
+        if (stats !== undefined) {
+            return stats;
         }
     }
     return undefined;
@@ -519,6 +581,10 @@ function pathHintFromPlainObject(raw: unknown): string | undefined {
         "relativePath",
         "file",
         "target",
+        "target_directory",
+        "targetDirectory",
+        "cwd",
+        "root",
     ] as const) {
         const value = record[key];
         if (typeof value === "string") {
@@ -527,6 +593,79 @@ function pathHintFromPlainObject(raw: unknown): string | undefined {
                 return trimmed;
             }
         }
+    }
+    return undefined;
+}
+
+function patternHintFromPlainObject(raw: unknown): string | undefined {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+        return undefined;
+    }
+    const record = raw as Record<string, unknown>;
+    for (const key of [
+        "pattern",
+        "query",
+        "search",
+        "glob",
+        "glob_pattern",
+        "globPattern",
+        "include",
+    ] as const) {
+        const value = record[key];
+        if (typeof value === "string") {
+            const trimmed = value.trim();
+            if (trimmed.length > 0) {
+                return trimmed;
+            }
+        }
+    }
+    return undefined;
+}
+
+function pathHintFromErrorText(text: string): string | undefined {
+    const trimmed = text.trim();
+    if (trimmed.length === 0) {
+        return undefined;
+    }
+    const pathDoesNotExist = trimmed.match(
+        /^Path does not exist:\s*(.+)$/i,
+    )?.[1];
+    if (pathDoesNotExist !== undefined && pathDoesNotExist.length > 0) {
+        return pathDoesNotExist.trim();
+    }
+    return undefined;
+}
+
+function pathHintFromErrorField(raw: unknown): string | undefined {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+        return undefined;
+    }
+    const record = raw as Record<string, unknown>;
+    if (typeof record.error === "string") {
+        return pathHintFromErrorText(record.error);
+    }
+    return undefined;
+}
+
+/** Compact count label for Cursor-style search completions (`totalMatches` / `totalFiles`). */
+export function searchStatsSubtitleFromRawOutput(
+    raw: unknown,
+): string | undefined {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+        return undefined;
+    }
+    const record = raw as Record<string, unknown>;
+    if (typeof record.totalMatches === "number") {
+        const count = record.totalMatches;
+        return count === 1 ? "1 match" : `${count} matches`;
+    }
+    if (typeof record.totalFiles === "number") {
+        const count = record.totalFiles;
+        return count === 1 ? "1 file" : `${count} files`;
+    }
+    if (typeof record.resultCount === "number") {
+        const count = record.resultCount;
+        return count === 1 ? "1 result" : `${count} results`;
     }
     return undefined;
 }
@@ -602,6 +741,14 @@ export function toolCallSubtitleFromToolCall(
         }
         return formatToolRawInput(call.rawInput);
     }
+    const fromRawInputSearch = searchSubtitleFromRawInput(
+        call.rawInput,
+        call,
+        kindStr.length > 0 ? kindStr : undefined,
+    );
+    if (fromRawInputSearch !== undefined) {
+        return fromRawInputSearch;
+    }
     const fromContent = firstToolCallTextPreview(call);
     if (fromContent !== undefined) {
         return fromContent;
@@ -611,6 +758,14 @@ export function toolCallSubtitleFromToolCall(
         if (locPath.length > 0) {
             return locPath;
         }
+    }
+    const fromRawInputPath = pathHintFromStructuredUnknown(call.rawInput);
+    if (fromRawInputPath !== undefined) {
+        return formatSubtitlePathForKind(
+            fromRawInputPath,
+            call,
+            kindStr.length > 0 ? kindStr : undefined,
+        );
     }
     return formatToolRawInput(call.rawInput);
 }

@@ -203,6 +203,8 @@ export type AcpAgentProcessOptions = {
         method: string,
         params: Record<string, unknown>,
     ) => Promise<void>;
+    /** Called after the agent reads a workspace file via ACP `fs/readTextFile`. */
+    onHostFilesystemRead?: (path: string) => void;
     hostFilesystem: AcpHostFilesystem;
     rpcNdjsonSink: AcpRpcNdjsonSink;
     /** Workspace folder used for spawn `cwd` and `session/new` `cwd` metadata. */
@@ -470,6 +472,7 @@ export class AcpAgentProcess {
             const content = await this.options.hostFilesystem.readTextFile(
                 params.path,
             );
+            this.options.onHostFilesystemRead?.(params.path);
             return { content };
         } catch (err) {
             // Agents (e.g. Gemini CLI) read before write to merge edits; a missing file must
