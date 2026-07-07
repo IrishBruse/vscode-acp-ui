@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     ACP_UI_SESSION_SCHEMA,
     enqueueSessionFileWrite,
+    isFlatSessionFilePath,
     normalizeUserMessageHistory,
     parseSessionDocument,
     parseSessionFile,
@@ -151,6 +152,20 @@ describe("parseSessionHeaderLine", () => {
         expect(parseSessionHeaderLine("{}")).toBeNull();
         expect(parseSessionHeaderLine("")).toBeNull();
         expect(parseSessionHeaderLine("not json")).toBeNull();
+    });
+});
+
+describe("isFlatSessionFilePath", () => {
+    it("detects legacy flat files directly under the chats root", () => {
+        expect(
+            isFlatSessionFilePath("/data/chats/My Chat.acp", "/data/chats"),
+        ).toBe(true);
+        expect(
+            isFlatSessionFilePath(
+                "/data/chats/session-id/My Chat.acp",
+                "/data/chats",
+            ),
+        ).toBe(false);
     });
 });
 

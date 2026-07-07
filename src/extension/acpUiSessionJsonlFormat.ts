@@ -1,5 +1,15 @@
+import { dirname } from "node:path";
+
 export const ACP_UI_SESSION_SCHEMA = "acpUi/session/1" as const;
 export const ACP_UI_SESSION_FILE_SUFFIX = ".acp";
+
+/** True when the session file sits directly under the chats root (legacy layout). */
+export function isFlatSessionFilePath(
+    sessionFilePath: string,
+    sessionsDirPath: string,
+): boolean {
+    return dirname(sessionFilePath) === sessionsDirPath;
+}
 
 const sessionTitleFileNameMaxLength = 120;
 const invalidSessionFileNameChars = /[<>:"/\\|?*]/g;

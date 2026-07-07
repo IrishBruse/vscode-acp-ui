@@ -6,10 +6,12 @@ ACP UI manages chat sessions end to end: creating chats, resuming conversations,
 
 When you reopen a chat, ACP UI restores the conversation when the agent supports `session/load` and the chat has a stored agent session id.
 Agent-side context and replayed messages appear in the trace without starting a blank session.
-If resume fails or the agent does not support load, ACP UI falls back to a new agent session and local JSONL replay when available.
+If resume fails or the agent does not support load, ACP UI falls back to a new agent session.
+Composer prompt history (Arrow-Up recall) is restored from the local `.acp` file when present.
 
-Each chat is backed by a local transcript file.
-Closing and reopening the chat restores your message history from disk when agent-side resume is unavailable or fails.
+Each chat is backed by a local session file that stores metadata and composer history.
+Closing and reopening the chat restores composer history from disk.
+The live transcript comes from the agent via `session/load` replay when resume succeeds.
 
 The Chats sidebar lists agent sessions when the active agent supports `session/list`, and falls back to local `.acp` files when it does not.
 Deleting a chat removes the local transcript and notifies the agent when it supports `session/delete` and the chat has a stored runtime session id.
@@ -36,16 +38,17 @@ That includes `user_message_chunk` to user text in the trace.
 
 Protocol: [session setup](../../acp/protocol/v1/session-setup.mdx).
 
-### Local persistence (JSONL)
+### Local persistence
 
-ACP UI uses client-owned JSONL session files (`acpUi/session/1` schema) as a supplement to ACP `session/load`.
+ACP UI uses client-owned session files (`acpUi/session/1` schema) for session metadata and composer user-message history.
 
-[acpUiSessionJsonl.ts](../../../src/extension/acpUiSessionJsonl.ts) handles append and read.
-[acpUiSessionController.ts](../../../src/extension/acpUiSessionController.ts) appends events during chat and sends `historyReplay` before `init` on open.
-[main.ts](../../../webview/acp-ui/src/main.ts) applies `historyReplay` before the webview mounts.
+[acpUiSessionJsonl.ts](../../../src/extension/acpUiSessionJsonl.ts) handles read and write.
+[acpUiSessionController.ts](../../../src/extension/acpUiSessionController.ts) passes composer `history` in the `init` bootstrap payload.
+[deleteSessionFile](../../../src/extension/acpUiSessionJsonl.ts) removes the per-session folder (or a legacy flat file only).
 
-When `session/load` runs successfully, JSONL is cleared first and agent replay is authoritative.
-On load failure, saved JSONL restores to disk and replays in the webview.
+ACP transcript events are not persisted in `.acp` files.
+When `session/load` succeeds, agent replay is authoritative for the trace.
+On load failure, the bridge falls back to `session/new` and the webview starts with an empty trace (composer history still comes from `init.history`).
 
 ### List and delete
 
@@ -65,8 +68,10 @@ Protocol: [session list](../../acp/protocol/v1/session-list.mdx), [session delet
 
 [sessionUpdateMapping.ts](../../../src/acp/mapping/sessionUpdateMapping.ts) maps `session/update` notifications to webview messages.
 `user_message_chunk` maps to append user text (shipped).
+`config_option_update` maps to `sessionConfigOptions` and syncs bridge cache via [syncConfigOptionsFromAgent](../../../src/acp/session/acpSessionBridge.ts).
 
-Still no-op in the default branch: `current_mode_update`, `config_option_update`, `session_info_update`, and `usage_update`.
+Still no-op in the default branch: `current_mode_update` and `usage_update`.
+`session_info_update` updates the session title via a bridge hook, not the trace.
 
 Task: [session-update-handlers](../../tasks/session-update-handlers.md).
 Protocol: [session modes](../../acp/protocol/v1/session-modes.mdx), [session config options](../../acp/protocol/v1/session-config-options.mdx).

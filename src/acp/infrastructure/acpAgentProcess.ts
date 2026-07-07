@@ -207,6 +207,8 @@ export type AcpAgentProcessOptions = {
     rpcNdjsonSink: AcpRpcNdjsonSink;
     /** Workspace folder used for spawn `cwd` and `session/new` `cwd` metadata. */
     getWorkspaceRoot: () => string | undefined;
+    /** Called when the agent subprocess exits or stdio closes. */
+    onProcessExit?: () => void;
 };
 
 /**
@@ -263,6 +265,8 @@ export class AcpAgentProcess {
             console.error(
                 `[ACP Agent ${this.options.config.name}] exited code=${code ?? "null"} signal=${signal ?? "null"}`,
             );
+            this.connection = null;
+            this.options.onProcessExit?.();
         });
 
         this.child.on("close", (code, signal) => {

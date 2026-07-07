@@ -66,6 +66,17 @@ export function mountChatView(
     > = {
         current: null,
     };
+    const pendingExtensionMessages: ExtensionMessageAfterInit[] = [];
+    const flushPendingExtensionMessages = (): void => {
+        const dispatch = extensionDispatchRef.current;
+        if (dispatch === null) {
+            return;
+        }
+        for (const message of pendingExtensionMessages) {
+            dispatch(message);
+        }
+        pendingExtensionMessages.length = 0;
+    };
     const reactRoot = createRoot(root);
     reactRoot.render(
         <AcpUiApp
@@ -84,11 +95,17 @@ export function mountChatView(
             postCursorAskQuestionResponse={postCursorAskQuestionResponse}
             postCursorCreatePlanResponse={postCursorCreatePlanResponse}
             extensionDispatchRef={extensionDispatchRef}
+            onExtensionDispatchReady={flushPendingExtensionMessages}
         />,
     );
     return {
         handleMessage(message: ExtensionMessageAfterInit): void {
-            extensionDispatchRef.current?.(message);
+            const dispatch = extensionDispatchRef.current;
+            if (dispatch === null) {
+                pendingExtensionMessages.push(message);
+                return;
+            }
+            dispatch(message);
         },
     };
 }

@@ -98,6 +98,7 @@ export type AcpUiAppProps = {
   extensionDispatchRef: RefObject<
     ((message: ExtensionMessageAfterInit) => void) | null
   >;
+  onExtensionDispatchReady?: () => void;
 };
 
 /**
@@ -119,6 +120,7 @@ export function AcpUiApp({
   postCursorAskQuestionResponse,
   postCursorCreatePlanResponse,
   extensionDispatchRef,
+  onExtensionDispatchReady,
 }: AcpUiAppProps): ReactElement {
   const [state, dispatch] = useReducer(
     chatReducer,
@@ -180,6 +182,10 @@ export function AcpUiApp({
     }
     dispatch(message as ChatAction);
   };
+
+  useLayoutEffect(() => {
+    onExtensionDispatchReady?.();
+  });
 
   useLayoutEffect(() => {
     const cleanup = installAgentMarkdownThemeColors(init.vscodeThemeVariables);

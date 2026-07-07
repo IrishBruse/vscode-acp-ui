@@ -112,6 +112,7 @@ export class AcpSessionBridge {
             hostFilesystem: host.hostFilesystem,
             rpcNdjsonSink: host.rpcNdjsonSink,
             getWorkspaceRoot: host.getWorkspaceRoot,
+            onProcessExit: () => this.handleAgentProcessExit(),
         });
         this.agentProcess.onSessionUpdate((params) =>
             this.handleSessionUpdate(params),
@@ -158,7 +159,9 @@ export class AcpSessionBridge {
                     optionId: message.selectedOptionId,
                 },
             });
+            return;
         }
+        resolve({ outcome: { outcome: "cancelled" } });
     }
 
     handleCursorAskQuestionResponse(
@@ -811,6 +814,32 @@ export class AcpSessionBridge {
         this.postToWebview({ type: "sessionConfigOptionsLoading" });
     }
 
+    private syncConfigOptionsFromAgent(
+        raw: ReadonlyArray<acp.SessionConfigOption>,
+    ): void {
+        const normalized = sessionConfigOptionsFromAgent(raw);
+        if (normalized === null || normalized.options.length === 0) {
+            return;
+        }
+        const options = normalized.options;
+        this.lastConfigOptions = { options };
+        writeCachedSessionConfigOptions(this.config.name, options);
+        const modelOption = options.find(
+            (option) => option.type === "select" && option.category === "model",
+        );
+        if (modelOption?.type === "select") {
+            const selection: AcpUiSessionModelSelection = {
+                currentModelId: modelOption.currentValue,
+                availableModels: modelOption.options.map((choice) => ({
+                    modelId: choice.value,
+                    name: choice.name,
+                })),
+            };
+            this.lastModelSelection = selection;
+            writeCachedSessionModels(this.config.name, selection);
+        }
+    }
+
     private applyConfigOptions(
         raw: ReadonlyArray<acp.SessionConfigOption>,
     ): void {
@@ -940,9 +969,21 @@ export class AcpSessionBridge {
         }
     }
 
+    private handleAgentProcessExit(): void {
+        this.acpSessionId = null;
+        this.prompting = false;
+        this.postToWebview({
+            type: "error",
+            message: "Agent process exited unexpectedly.",
+        });
+    }
+
     private handleSessionUpdate(params: acp.SessionNotification): void {
         if (params.update.sessionUpdate === "session_info_update") {
             this.hooks?.onSessionInfoUpdate?.(params.update);
+        }
+        if (params.update.sessionUpdate === "config_option_update") {
+            this.syncConfigOptionsFromAgent(params.update.configOptions);
         }
         const messages = sessionUpdateToWebviewMessages(
             params.update,

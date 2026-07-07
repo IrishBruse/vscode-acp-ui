@@ -6,6 +6,7 @@ import {
     ACP_UI_SESSION_SCHEMA,
     type AcpUiSessionDocument,
     enqueueSessionFileWrite,
+    isFlatSessionFilePath,
     normalizeUserMessageHistory,
     parseSessionDocument,
     serializeSessionDocument,
@@ -20,6 +21,7 @@ export {
     type AcpUiSessionHeader,
     type AcpUiSessionMetadata,
     enqueueSessionFileWrite,
+    isFlatSessionFilePath,
     normalizeUserMessageHistory,
     parseSessionDocument,
     parseSessionFile,
@@ -97,7 +99,7 @@ export function sessionFileUriForId(
 
 /** True when the session file sits directly under the chats root (legacy layout). */
 export function isFlatSessionFileUri(uri: Uri, sessionsDir: Uri): boolean {
-    return dirname(uri.fsPath) === sessionsDir.fsPath;
+    return isFlatSessionFilePath(uri.fsPath, sessionsDir.fsPath);
 }
 
 async function listSessionFileNamesInDirectory(dir: Uri): Promise<Set<string>> {
@@ -340,10 +342,26 @@ export async function updateSessionHeader(
     });
 }
 
-export async function deleteSessionFile(uri: Uri): Promise<void> {
-    const sessionDir = Uri.joinPath(uri, "..");
+export async function deleteSessionFile(
+    context: ExtensionContext,
+    uri: Uri,
+): Promise<void> {
+    const sessionsDir = resolveSessionsDirectoryUri(context);
+    if (isFlatSessionFileUri(uri, sessionsDir)) {
+        try {
+            await workspace.fs.delete(uri, { useTrash: true });
+        } catch {
+            // File may already be gone.
+        }
+        return;
+    }
+    const document = await readSessionDocumentAtUri(uri);
+    const deleteTarget =
+        document !== null
+            ? sessionDirectoryUriForId(context, document.id)
+            : Uri.joinPath(uri, "..");
     try {
-        await workspace.fs.delete(sessionDir, {
+        await workspace.fs.delete(deleteTarget, {
             recursive: true,
             useTrash: true,
         });

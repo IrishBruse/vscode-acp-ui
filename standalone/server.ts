@@ -497,11 +497,12 @@ wss.on("connection", (ws: WebSocket) => {
     console.log(`client connected  session=${sessionId}`);
 
     let bridge: AcpSessionBridge | null = null;
-    let prompting = false;
     /** Last model chosen in the UI; applied on the next `connect` (including after `/clear`). */
     let userPreferredModelId: string | null = null;
     let selectedAgentName = firstAgentConfig.name;
     let connectInFlight: Promise<void> | null = null;
+    let connectGeneration = 0;
+    let bootstrapSent = false;
     let sessionDemoSeed: string | undefined;
     let sessionDemoFixture: string | undefined;
     let sessionDemoReplay: boolean | undefined;
@@ -570,7 +571,6 @@ wss.on("connection", (ws: WebSocket) => {
             return;
         }
         console.log(`demo: replaying ${fixturePath}`);
-        prompting = true;
         try {
             const stopReason = await replayFixture(fixturePath, send);
             send({ type: "turnComplete", stopReason });
@@ -580,8 +580,6 @@ wss.on("connection", (ws: WebSocket) => {
                 type: "error",
                 message: `Demo fixture replay error: ${message}`,
             });
-        } finally {
-            prompting = false;
         }
     }
 
@@ -591,30 +589,43 @@ wss.on("connection", (ws: WebSocket) => {
     }
 
     function disposeBridge(): void {
+        connectGeneration += 1;
+        connectInFlight = null;
         if (bridge !== null) {
             bridge.dispose();
             bridge = null;
         }
     }
 
-    async function runConnectAgent(): Promise<void> {
-        disposeBridge();
+    async function runConnectAgent(generation: number): Promise<void> {
         const cfg = activeAgentConfig();
         const next = new AcpSessionBridge(cfg, send, hostRuntime);
-        bridge = next;
         const preferred = userPreferredModelId ?? undefined;
         await next.connect({ preferredModelId: preferred });
+        if (generation !== connectGeneration) {
+            next.dispose();
+            return;
+        }
+        bridge = next;
     }
 
     async function connectAgent(): Promise<void> {
         if (bridge !== null) {
             return;
         }
+        const generation = connectGeneration;
         if (connectInFlight !== null) {
-            await connectInFlight;
-            return;
+            const inFlight = connectInFlight;
+            await inFlight;
+            if (bridge !== null) {
+                return;
+            }
+            if (connectInFlight === inFlight) {
+                return;
+            }
+            return connectAgent();
         }
-        const started = runConnectAgent();
+        const started = runConnectAgent(generation);
         connectInFlight = started;
         try {
             await started;
@@ -626,7 +637,9 @@ wss.on("connection", (ws: WebSocket) => {
             });
             disposeBridge();
         } finally {
-            connectInFlight = null;
+            if (connectInFlight === started) {
+                connectInFlight = null;
+            }
         }
     }
 
@@ -643,6 +656,10 @@ wss.on("connection", (ws: WebSocket) => {
         }
 
         if (parsed.type === "ready") {
+            if (bootstrapSent) {
+                return;
+            }
+            bootstrapSent = true;
             sessionDemoSeed = parsed.demoSeed;
             sessionDemoFixture = parsed.demoFixture;
             sessionDemoReplay = parsed.demoReplay;
@@ -718,16 +735,25 @@ wss.on("connection", (ws: WebSocket) => {
                 return;
             }
             selectedAgentName = next.name;
-            const hadBridge = bridge !== null;
-            if (hadBridge) {
-                disposeBridge();
-            }
+            disposeBridge();
+            send({ type: "sessionReset" });
             send({
                 type: "acpAgentSelection",
                 currentAgentName: next.name,
                 availableAgentNames: agentConfigs.map((c) => c.name),
             });
-            if (hadBridge) {
+            const resetSeed = composerSeedForInit();
+            if (resetSeed.configOptions !== null) {
+                send({
+                    type: "sessionConfigOptions",
+                    options: resetSeed.configOptions,
+                });
+            } else if (resetSeed.modelSelection !== null) {
+                send({ type: "sessionModels", ...resetSeed.modelSelection });
+            } else {
+                send({ type: "sessionConfigOptionsLoading" });
+            }
+            if (!DEMO_MODE) {
                 void connectAgent();
             }
             return;
@@ -777,7 +803,6 @@ wss.on("connection", (ws: WebSocket) => {
             const fixturePath = resolveFixture(parsed.body);
             if (fixturePath !== null) {
                 console.log(`fixture: replaying ${fixturePath}`);
-                prompting = true;
                 try {
                     const stopReason = await replayFixture(fixturePath, send);
                     send({ type: "turnComplete", stopReason });
@@ -788,8 +813,6 @@ wss.on("connection", (ws: WebSocket) => {
                         type: "error",
                         message: `Fixture replay error: ${message}`,
                     });
-                } finally {
-                    prompting = false;
                 }
                 return;
             }
@@ -811,19 +834,12 @@ wss.on("connection", (ws: WebSocket) => {
             if (bridge.isPrompting) {
                 await bridge.cancel();
             }
-            prompting = true;
-            try {
-                await bridge.prompt(parsed.body);
-            } finally {
-                prompting = false;
-            }
+            await bridge.prompt(parsed.body);
             return;
         }
 
         if (parsed.type === "cancel" && bridge) {
-            if (prompting) {
-                await bridge.cancel();
-            }
+            await bridge.cancel();
         }
     };
 

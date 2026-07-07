@@ -521,6 +521,7 @@ function applySessionReset(state: ChatState): ChatState {
         modelSelection: null,
         sessionConfigLoading: true,
         sessionHistoryLoading: false,
+        composerPicksLocked: false,
     };
 }
 

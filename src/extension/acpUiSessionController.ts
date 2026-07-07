@@ -69,8 +69,13 @@ export class AcpUiSessionController {
     private bridgeConnectInFlight:
         | Promise<AcpSessionBridge | undefined>
         | undefined;
+    private bridgeConnectGeneration = 0;
+    private bootstrapSent = false;
     private agentConfig: AcpAgentConfig | undefined;
     private pendingModelId: string | undefined;
+    private pendingConfigOption:
+        | { configId: string; value: string | boolean }
+        | undefined;
     private agentLoadInProgress = false;
     private readonly disposables: Array<{ dispose(): void }> = [];
 
@@ -266,6 +271,8 @@ export class AcpUiSessionController {
     }
 
     private disposeBridge(): void {
+        this.bridgeConnectGeneration += 1;
+        this.bridgeConnectInFlight = undefined;
         if (this.bridge !== undefined) {
             this.bridge.dispose();
             this.bridge = undefined;
@@ -279,17 +286,35 @@ export class AcpUiSessionController {
             return this.bridge;
         }
         if (this.bridgeConnectInFlight !== undefined) {
-            return this.bridgeConnectInFlight;
+            const inFlight = this.bridgeConnectInFlight;
+            const result = await inFlight;
+            if (this.bridge !== undefined) {
+                return this.bridge;
+            }
+            if (this.bridgeConnectInFlight === inFlight) {
+                return result;
+            }
+            return this.ensureBridgeConnected();
         }
-        this.bridgeConnectInFlight = this.connectBridge();
+        const generation = this.bridgeConnectGeneration;
+        const connectPromise = this.connectBridge(generation);
+        this.bridgeConnectInFlight = connectPromise;
         try {
-            return await this.bridgeConnectInFlight;
+            const result = await connectPromise;
+            if (generation !== this.bridgeConnectGeneration) {
+                return undefined;
+            }
+            return result;
         } finally {
-            this.bridgeConnectInFlight = undefined;
+            if (this.bridgeConnectInFlight === connectPromise) {
+                this.bridgeConnectInFlight = undefined;
+            }
         }
     }
 
-    private async connectBridge(): Promise<AcpSessionBridge | undefined> {
+    private async connectBridge(
+        generation: number,
+    ): Promise<AcpSessionBridge | undefined> {
         const config = this.agentConfig ?? getAcpAgentConfigsFromSettings()[0];
         if (config === undefined) {
             this.post({
@@ -312,9 +337,10 @@ export class AcpUiSessionController {
                 onResumeSession: () => this.beginAgentHistoryLoad(),
             },
         );
-        this.bridge = bridge;
         const preferred = this.pendingModelId;
         this.pendingModelId = undefined;
+        const pendingConfig = this.pendingConfigOption;
+        this.pendingConfigOption = undefined;
         const header = parseSessionFile(this.options.document.getText()).header;
         const runtimeSessionId = header?.runtimeSessionId?.trim();
         try {
@@ -325,6 +351,26 @@ export class AcpUiSessionController {
                     ? { runtimeSessionId }
                     : {}),
             });
+            if (generation !== this.bridgeConnectGeneration) {
+                bridge.dispose();
+                return undefined;
+            }
+            this.bridge = bridge;
+            if (pendingConfig !== undefined) {
+                try {
+                    await bridge.setSessionConfigOption(
+                        pendingConfig.configId,
+                        pendingConfig.value,
+                    );
+                } catch (err: unknown) {
+                    const msg =
+                        err instanceof Error ? err.message : String(err);
+                    this.post({
+                        type: "error",
+                        message: `Config change failed: ${msg}`,
+                    });
+                }
+            }
             const connectedSessionId = bridge.sessionId;
             if (connectedSessionId !== null) {
                 void setAcpUiSessionRuntimeSessionId(
@@ -364,6 +410,10 @@ export class AcpUiSessionController {
         }
 
         if (parsed.type === "ready") {
+            if (this.bootstrapSent) {
+                return;
+            }
+            this.bootstrapSent = true;
             const header = parseSessionFile(
                 this.options.document.getText(),
             ).header;
@@ -398,7 +448,8 @@ export class AcpUiSessionController {
         if (parsed.type === "resetSession") {
             this.disposeBridge();
             this.pendingModelId = undefined;
-            void clearAcpUiSessionRuntimeSessionId(this.sessionId);
+            this.pendingConfigOption = undefined;
+            await clearAcpUiSessionRuntimeSessionId(this.sessionId);
             this.post({ type: "sessionReset" });
             this.postSessionConfigSeedOrLoading();
             void this.ensureBridgeConnected();
@@ -424,7 +475,10 @@ export class AcpUiSessionController {
         }
 
         if (parsed.type === "cancel") {
-            void this.bridge?.cancel();
+            void (async () => {
+                const b = await this.ensureBridgeConnected();
+                await b?.cancel();
+            })();
             return;
         }
 
@@ -480,8 +534,12 @@ export class AcpUiSessionController {
 
         if (parsed.type === "setSessionConfigOption") {
             void (async () => {
-                const b = this.bridge;
+                const b = this.bridge ?? (await this.ensureBridgeConnected());
                 if (b === undefined) {
+                    this.pendingConfigOption = {
+                        configId: parsed.configId,
+                        value: parsed.value,
+                    };
                     return;
                 }
                 try {
@@ -514,12 +572,16 @@ export class AcpUiSessionController {
             void setAcpUiSessionAgentName(this.sessionId, config.name);
             this.disposeBridge();
             this.pendingModelId = undefined;
+            this.pendingConfigOption = undefined;
+            await clearAcpUiSessionRuntimeSessionId(this.sessionId);
             const names = getAcpAgentConfigsFromSettings().map((c) => c.name);
+            this.post({ type: "sessionReset" });
             this.post({
                 type: "acpAgentSelection",
                 currentAgentName: config.name,
                 availableAgentNames: names,
             });
+            this.postSessionConfigSeedOrLoading();
             void this.ensureBridgeConnected();
             return;
         }

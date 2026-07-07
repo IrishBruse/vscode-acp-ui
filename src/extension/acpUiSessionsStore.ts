@@ -250,8 +250,8 @@ export async function addAcpUiSession(
  */
 export async function removeAcpUiSession(id: string): Promise<void> {
     const row = sessions.find((s) => s.id === id);
-    if (row !== undefined) {
-        await deleteSessionFile(row.uri);
+    if (row !== undefined && extensionContext !== null) {
+        await deleteSessionFile(extensionContext, row.uri);
     }
     const index = sessions.findIndex((s) => s.id === id);
     if (index >= 0) {

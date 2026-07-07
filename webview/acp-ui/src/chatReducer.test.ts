@@ -237,6 +237,32 @@ describe("chatReducer", () => {
         expect(done.sessionHistoryLoading).toBe(false);
     });
 
+    it("clears transcript and unlocks composer picks on sessionReset", () => {
+        let state = createInitialChatState();
+        state = {
+            ...state,
+            trace: [{ type: "user", text: "hello" }],
+            composerPicksLocked: true,
+            promptInFlight: true,
+            sessionConfigOptions: [
+                {
+                    configId: "model",
+                    name: "Model",
+                    category: "model",
+                    type: "select",
+                    currentValue: "a",
+                    options: [{ value: "a", name: "A" }],
+                },
+            ],
+        };
+        const reset = chatReducer(state, { type: "sessionReset" });
+        expect(reset.trace).toEqual([]);
+        expect(reset.composerPicksLocked).toBe(false);
+        expect(reset.promptInFlight).toBe(false);
+        expect(reset.sessionConfigOptions).toBeNull();
+        expect(reset.sessionConfigLoading).toBe(true);
+    });
+
     it("seeds sessionHistoryLoading from init when resuming a runtime session", () => {
         const state = createChatStateFromInit({
             type: "init",
