@@ -43,6 +43,8 @@ Protocol: [session setup](../../acp/protocol/v1/session-setup.mdx).
 ACP UI uses client-owned session files (`acpUi/session/1` schema) for session metadata and composer user-message history.
 
 [acpUiSessionJsonl.ts](../../../src/extension/acpUiSessionJsonl.ts) handles read and write.
+[resolveSessionsDirectoryUri](../../../src/extension/acpUiSessionJsonl.ts#L55-L77) honors `ib-acp-ui.sessionsDirectory` when set.
+See [editor-shell](../ui/editor-shell.md).
 [acpUiSessionController.ts](../../../src/extension/acpUiSessionController.ts) passes composer `history` in the `init` bootstrap payload.
 [deleteSessionFile](../../../src/extension/acpUiSessionJsonl.ts) removes the per-session folder (or a legacy flat file only).
 

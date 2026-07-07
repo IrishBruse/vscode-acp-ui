@@ -9,8 +9,9 @@ Goals include phased plan dialogs, a dedicated todo panel, structured subagent t
 
 ## Implementation
 
-[AcpSessionBridge.handleExtensionMethod](../../../src/acp/session/acpSessionBridge.ts) routes `cursor/*` ext methods.
-[CursorAskQuestionDialog](../../../webview/acp-ui/src/components/) handles ask-question flows.
+[handleExtensionMethod](../../../src/acp/session/acpSessionBridge.ts#L218-L297) routes `cursor/*` ext methods.
+[CursorAskQuestionDialog](../../../webview/acp-ui/src/components/CursorAskQuestionDialog.tsx) handles ask-question flows.
+[CursorCreatePlanDialog](../../../webview/acp-ui/src/components/CursorCreatePlanDialog.tsx) handles basic create-plan acceptance.
 
 Gaps: `phases` on create_plan, dedicated UI for `update_todos` and `task`, inline `generate_image`, and agent `toolCallId` correlation in bridge request ids.
 

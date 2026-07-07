@@ -9,6 +9,19 @@ Type `/` to open slash-command suggestions from the connected agent alongside bu
 Type `@` to mention workspace files.
 Paths with spaces or quotes are inserted as quoted mentions.
 
+Drag files from the Explorer or your file manager onto the chat to insert `@` path mentions.
+
+Arrow Up recalls previous prompts from local session history when the caret is at the start of the first line.
+Arrow Down walks forward through recalled entries.
+History is stored in the `.acp` session file (up to 55 entries) and restored on reopen.
+
+Keyboard shortcuts while the composer is focused:
+
+- Enter sends, Shift+Enter inserts a newline
+- Shift+Tab cycles session mode when the agent exposes a mode option
+- Ctrl+C / Cmd+C cancels an in-flight prompt when supported
+- Ctrl+T / Cmd+T opens a new chat (when the Chats view or ACP UI editor is focused)
+
 Planned: send images, audio, and structured file references in prompts when the agent advertises multimodal `promptCapabilities`.
 Composer `@` file mentions will become structured ACP `resource` blocks instead of plain path text in the draft.
 Today prompts are a single text block.
@@ -38,6 +51,30 @@ Detection applies at the start of a line or after whitespace.
 Filtering is case-insensitive substring match, capped at 30 results.
 
 Protocol: [available_commands_update](../../acp/protocol/v2/slash-commands.mdx).
+
+### Prompt history
+
+[updateSessionHistory](../../../src/extension/acpUiSessionJsonl.ts) persists composer history to the session JSONL file.
+[maxUserMessageHistoryEntries](../../../src/extension/acpUiSessionJsonlFormat.ts#L16) caps history at 55 entries.
+
+[AcpUiApp](../../../webview/acp-ui/src/AcpUiApp.tsx#L487-L523) handles Arrow Up and Arrow Down recall.
+[shouldDeferJsonlHistoryReplay](../../../src/extension/acpUiSessionJsonlFormat.ts#L294) skips duplicate replay when agent load already restored user chunks.
+
+Task: covered by [sessions](../acp/sessions.md).
+
+### File drag and drop
+
+[dataTransferLooksLikePathDrop](../../../webview/acp-ui/src/droppedFilePaths.ts#L8-L22) detects Explorer and OS file drops.
+[collectPathsFromDataTransfer](../../../webview/acp-ui/src/droppedFilePaths.ts#L29-L60) resolves paths relative to the workspace root.
+[appendFileMentionsToDraft](../../../webview/acp-ui/src/droppedFilePaths.ts#L180) inserts formatted `@` mentions.
+
+[AcpUiApp](../../../webview/acp-ui/src/AcpUiApp.tsx) handles dragover and drop on the shell.
+
+### Keyboard bindings
+
+[shouldCycleSessionModeOnShiftTab](../../../webview/acp-ui/src/components/composerKeybindings.ts#L16-L30) gates Shift+Tab mode cycling.
+[shouldCancelRunOnCtrlC](../../../webview/acp-ui/src/components/composerKeybindings.ts#L32-L46) gates Ctrl+C cancel.
+[shouldOpenNewChatOnCtrlT](../../../webview/acp-ui/src/components/composerKeybindings.ts#L1-L14) gates Ctrl+T new chat.
 
 ### Multimodal prompts
 

@@ -4,11 +4,12 @@
 
 ACP UI identifies itself and advertises client capabilities during the `initialize` handshake with each agent.
 
-Today the most visible result is the Cursor model and thinking-level toolbar in the composer when you use the Cursor ACP agent.
-Other capability flags (terminals, terminal auth, boolean config options, elicitation) are planned.
+Agents receive `clientInfo` (name, version, title) from the extension `package.json` on every connect.
+If protocol version negotiation fails, the chat shows a clear error with guidance to update ACP UI or the agent.
 
-Planned: agents will receive `clientInfo` (name, version, title) on every `initialize` so they can identify the ACP UI build.
-Users see a clear message when protocol version negotiation fails.
+The most visible capability result today is the Cursor model and thinking-level toolbar in the composer when you use the Cursor ACP agent.
+Other capability flags (terminals, terminal auth, boolean config options, elicitation) are planned.
+See [session-config](../ui/session-config.md) for the shipped model toolbar.
 
 ## Implementation
 

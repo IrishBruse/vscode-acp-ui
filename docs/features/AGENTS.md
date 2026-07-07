@@ -8,15 +8,23 @@ Each file describes a **combined high-level feature**, not a single task.
 ```
 docs/features/
   AGENTS.md                 # this file — the pattern for feature docs
+  README.md                 # feature index
   acp/                      # Agent Client Protocol client surfaces
     sessions.md
     client.md
+    permissions.md
     ...
   ui/                       # chat webview and composer surfaces
+    editor-shell.md
+    agents.md
+    chat-trace.md
     composer.md
+    session-config.md
     cursor-extensions.md
-  maintainer/               # protocol/SDK evolution (no end-user surface)
+  maintainer/               # protocol/SDK evolution and dev tools
     platform.md
+    standalone.md
+    rpc-logging.md
   <group>/<feature-slug>.md # one file per high-level feature (kebab-case filename)
 ```
 

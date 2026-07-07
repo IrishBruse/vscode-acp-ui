@@ -2,9 +2,24 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-07-07
+
 - Added `minimal` tool call verbosity: groups tool calls with a summary line and shows only the last three detail lines (Cursor-style).
   `compact` now shows one line per tool call with no group summary.
   `verbose` is unchanged (full blocks with previews and diffs).
+- Added a copy button on markdown code blocks (hover to reveal, with brief copied feedback).
+- Store chats under `chats/<sessionId>/` with title-based `.acp` files so renames do not collide.
+- Session `.acp` files are now a single JSON document with a `history` array (composer messages only).
+  RPC traffic is logged to the `ACP UI RPC` output channel instead of session files.
+- Send `clientInfo` on ACP initialize so agents receive package metadata.
+  Protocol version mismatches surface actionable errors.
+- Chats sidebar lists agent sessions when supported, falls back to local files, and stays visible while refreshing.
+- Wire `session/delete` through the SDK with local tombstones when remote delete is unavailable.
+- Added `npm run install:local` to build and install the extension into local VS Code.
+- Markdown table headers use the VS Code theme foreground color.
+- Fixed Chats delete so removed sessions stay gone after refresh.
+- Fixed mid-prompt reconnect when sending a message after an agent-driven title update.
+- Fixed ACP session lifecycle bugs in delete, connect, and UI config sync.
 
 ## 0.4.0 - 2026-07-06
 
